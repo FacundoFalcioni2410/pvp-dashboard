@@ -1,6 +1,6 @@
 # Excel Price Dashboard
 
-Aplicación para analizar desviaciones de precio respecto al PVP pactado. Subís un Excel, filtrás por usuario ML y visualizás el score de cumplimiento de precios por cliente.
+Aplicación para analizar desviaciones de precio respecto al PVP. Subís un Excel, filtrás por usuario ML y visualizás el score de cumplimiento de precios por cliente.
 
 ---
 
