@@ -1,3 +1,6 @@
+# Dataset storage (SQLite files with user data)
+backend/datasets/
+
 # Logs
 logs
 *.log

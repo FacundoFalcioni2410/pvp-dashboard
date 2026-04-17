@@ -33,12 +33,12 @@ export function scoreLabel(score) {
   return "Crítico (>85%)";
 }
 
-export function fmtPct(val) {
+export function fmtPct(row, field) {
+  const val = row?.normalized_pct ?? row?.[field];
   if (val == null) return "—";
   const n = parseFloat(val);
-  if (isNaN(n)) return String(val);
-  const display = Math.abs(n) <= 1.5 ? (n * 100).toFixed(1) : n.toFixed(1);
-  return `${display}%`;
+  if (isNaN(n)) return "—";
+  return `${n.toFixed(1)}%`;
 }
 
 export function fmt(val) {

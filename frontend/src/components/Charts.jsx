@@ -4,15 +4,10 @@ import {
   ResponsiveContainer, Cell, LabelList,
 } from "recharts";
 import { scoreColor } from "../utils/score";
+import { getTooltipStyle } from "../utils/theme";
 
 const CHART_PAGE = 15;
 const CHART_H = CHART_PAGE * 32;
-
-const TOOLTIP_STYLE = {
-  contentStyle: { background: "#1e1e2e", border: "1px solid #444", color: "#e0e0f0" },
-  labelStyle: { color: "#e0e0f0" },
-  itemStyle: { color: "#e0e0f0" },
-};
 
 function CollapsibleChart({ title, children, defaultOpen = true }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -29,6 +24,60 @@ function CollapsibleChart({ title, children, defaultOpen = true }) {
     </div>
   );
 }
+
+const SummaryStats = memo(function SummaryStats({ rows }) {
+  const stats = useMemo(() => {
+    const total = rows.length;
+    if (total === 0) return null;
+
+    const scores = rows.map((r) => r.score).filter((s) => s != null && s > 0);
+    const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+
+    const infractions = rows.filter((r) => {
+      const pct = Math.abs(parseFloat(r.normalized_pct) || 0);
+      return pct > 15;
+    }).length;
+
+    const highDev = rows.filter((r) => {
+      const pct = Math.abs(parseFloat(r.normalized_pct) || 0);
+      return pct > 40;
+    }).length;
+
+    return {
+      total,
+      avgScore,
+      infractions: Math.round((infractions / total) * 100),
+      highDev: Math.round((highDev / total) * 100),
+    };
+  }, [rows]);
+
+  if (!stats) return null;
+
+  return (
+    <div className="summary-stats">
+      <div className="stat-box">
+        <span className="stat-value">{stats.total}</span>
+        <span className="stat-label">Publicaciones</span>
+      </div>
+      <div className="stat-box">
+        <span className="stat-value" style={{ color: scoreColor(stats.avgScore) }}>{stats.avgScore}</span>
+        <span className="stat-label">Score Promedio</span>
+      </div>
+      <div className="stat-box">
+        <span className="stat-value" style={{ color: stats.infractions > 30 ? "#ef4444" : stats.infractions > 15 ? "#f97316" : "#eab308" }}>
+          {stats.infractions}%
+        </span>
+        <span className="stat-label">En Infracción (&gt;15%)</span>
+      </div>
+      <div className="stat-box">
+        <span className="stat-value" style={{ color: stats.highDev > 10 ? "#ef4444" : stats.highDev > 5 ? "#f97316" : "#eab308" }}>
+          {stats.highDev}%
+        </span>
+        <span className="stat-label">Alto Desvío (&gt;40%)</span>
+      </div>
+    </div>
+  );
+});
 
 const StackedBarChart = memo(function StackedBarChart({ rows }) {
   const data = useMemo(() => {
@@ -52,11 +101,11 @@ const StackedBarChart = memo(function StackedBarChart({ rows }) {
   return (
     <ResponsiveContainer width="100%" height={200}>
       <BarChart data={data} layout="vertical" margin={{ top: 8, right: 40, left: 40, bottom: 8 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3a" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
         <XAxis type="number" tick={{ fontSize: 11 }} />
         <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={30} />
         <Tooltip
-          {...TOOLTIP_STYLE}
+          {...getTooltipStyle()}
           formatter={(value) => [`${value} publicaciones`, "Cantidad"]}
         />
         <Bar dataKey="count" radius={[0, 4, 4, 0]} fill="#6366f1" />
@@ -69,11 +118,11 @@ const BarPanel = memo(function BarPanel({ clientData, onSelect }) {
   return (
     <ResponsiveContainer width="100%" height={CHART_H}>
       <BarChart data={clientData} layout="vertical" margin={{ top: 4, right: 36, left: 4, bottom: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3a" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
         <XAxis type="number" domain={[0, 10]} tick={{ fontSize: 11 }} />
         <YAxis type="category" dataKey="displayName" width={140} tick={{ fontSize: 11 }} />
         <Tooltip
-          {...TOOLTIP_STYLE}
+          {...getTooltipStyle()}
           formatter={(v, name, payload) => [`Score: ${v}`, payload[0]?.payload?.fullName || payload[0]?.payload?.name || ""]}
         />
         <Bar dataKey="avgScore" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(data) => onSelect?.(data)}>
@@ -88,7 +137,7 @@ const BarPanel = memo(function BarPanel({ clientData, onSelect }) {
 });
 
 const InfractionPanel = memo(function InfractionPanel({ data, onSelect }) {
-  const [sortBy, setSortBy] = useState("pct");
+  const [sortBy, setSortBy] = useState("count");
   const sorted = useMemo(() =>
     [...data].sort((a, b) => sortBy === "pct" ? b.pctInfraccion - a.pctInfraccion : b.count - a.count),
     [data, sortBy]
@@ -99,12 +148,12 @@ const InfractionPanel = memo(function InfractionPanel({ data, onSelect }) {
   return (
     <>
       <div className="chart-sort-btns">
-        <button className={`chart-sort-btn ${byPct ? "active" : ""}`} onClick={() => setSortBy("pct")}>% Desvío</button>
         <button className={`chart-sort-btn ${!byPct ? "active" : ""}`} onClick={() => setSortBy("count")}>Cantidad</button>
+        <button className={`chart-sort-btn ${byPct ? "active" : ""}`} onClick={() => setSortBy("pct")}>% Desvío</button>
       </div>
     <ResponsiveContainer width="100%" height={h}>
       <BarChart data={sorted} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3a" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
         <XAxis
           type="number"
           domain={byPct ? [0, 100] : [0, maxCount]}
@@ -113,12 +162,12 @@ const InfractionPanel = memo(function InfractionPanel({ data, onSelect }) {
         />
         <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 10 }} />
         <Tooltip
-          {...TOOLTIP_STYLE}
+          {...getTooltipStyle()}
           content={({ payload, label }) => {
             if (!payload?.length) return null;
             const d = payload[0].payload;
             return (
-              <div style={{ background: "#1e1e2e", border: "1px solid #444", padding: "8px 12px", fontSize: 12, color: "#e0e0f0", borderRadius: 6 }}>
+              <div style={getTooltipStyle().contentStyle}>
                 <p style={{ marginBottom: 4, fontWeight: 600 }}>{d.fullName || label}</p>
                 <p>% Infracción: {d.pctInfraccion}%</p>
                 <p>Publicaciones en infracción: {d.count} / {d.total}</p>
@@ -141,7 +190,7 @@ const InfractionPanel = memo(function InfractionPanel({ data, onSelect }) {
 });
 
 const HighDeviationPanel = memo(function HighDeviationPanel({ data, onSelect }) {
-  const [sortBy, setSortBy] = useState("pct");
+  const [sortBy, setSortBy] = useState("count");
   const sorted = useMemo(() =>
     [...data].sort((a, b) => sortBy === "pct" ? b.pctHighDeviation - a.pctHighDeviation : b.count - a.count),
     [data, sortBy]
@@ -152,12 +201,12 @@ const HighDeviationPanel = memo(function HighDeviationPanel({ data, onSelect }) 
   return (
     <>
       <div className="chart-sort-btns">
-        <button className={`chart-sort-btn ${byPct ? "active" : ""}`} onClick={() => setSortBy("pct")}>% Desvío</button>
         <button className={`chart-sort-btn ${!byPct ? "active" : ""}`} onClick={() => setSortBy("count")}>Cantidad</button>
+        <button className={`chart-sort-btn ${byPct ? "active" : ""}`} onClick={() => setSortBy("pct")}>% Desvío</button>
       </div>
     <ResponsiveContainer width="100%" height={h}>
       <BarChart data={sorted} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3a" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
         <XAxis
           type="number"
           domain={byPct ? [0, 100] : [0, maxCount]}
@@ -166,12 +215,12 @@ const HighDeviationPanel = memo(function HighDeviationPanel({ data, onSelect }) 
         />
         <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 10 }} />
         <Tooltip
-          {...TOOLTIP_STYLE}
+          {...getTooltipStyle()}
           content={({ payload, label }) => {
             if (!payload?.length) return null;
             const d = payload[0].payload;
             return (
-              <div style={{ background: "#1e1e2e", border: "1px solid #444", padding: "8px 12px", fontSize: 12, color: "#e0e0f0", borderRadius: 6 }}>
+              <div style={getTooltipStyle().contentStyle}>
                 <p style={{ marginBottom: 4, fontWeight: 600 }}>{d.fullName || label}</p>
                 <p>% Desvío Alto: {d.pctHighDeviation}%</p>
                 <p>Desvíos altos: {d.count} / {d.total}</p>
@@ -235,8 +284,8 @@ export default function Charts({ clients, rows, infractionChart, highDeviationCh
         <BarPanel clientData={clientData} onSelect={handleSelect} />
       </CollapsibleChart>
 
-      <CollapsibleChart title="Distribución por score y rango de desvío" defaultOpen={true}>
-        <StackedBarChart rows={rows} />
+      <CollapsibleChart title="Resumen del día" defaultOpen={true}>
+        <SummaryStats rows={rows} />
       </CollapsibleChart>
 
       {infractionChart && infractionChart.length > 0 && (

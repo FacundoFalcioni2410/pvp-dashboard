@@ -4,6 +4,40 @@ import { scoreClass, FIELDS } from "../utils/score";
 
 const PAGE_SIZE = 25;
 
+function ProductDropdown({ skus, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef();
+
+  useEffect(() => {
+    function handler(e) { if (!wrapRef.current?.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  if (skus.length <= 1) {
+    return skus[0] ? (
+      <span className="client-usuario clickable-product" onClick={() => onSelect(skus[0])}>
+        {skus[0]}
+      </span>
+    ) : null;
+  }
+
+  return (
+    <div ref={wrapRef} style={{ position: "relative", display: "inline" }}>
+      <span className="client-usuario" style={{ cursor: "pointer" }} onClick={() => setOpen((o) => !o)}>
+        {skus.length} productos ▼
+      </span>
+      {open && (
+        <ul className="filter-dropdown" style={{ position: "absolute", left: 0, top: "100%", zIndex: 10, minWidth: 180 }}>
+          {skus.map((s) => (
+            <li key={s} className="filter-suggestion-item" onMouseDown={() => { onSelect(s); setOpen(false); }}>{s}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 const SCORE_FILTERS = [
   { label: "Todos", value: "all" },
   { label: "Crítico", value: "red", min: 1, max: 3 },
@@ -102,8 +136,8 @@ function UserDropdown({ rows, selected, onChange }) {
   );
 }
 
-export default function ClientList({ clients, rows, onSelect, selectedName }) {
-  const [search, setSearch] = useState("");
+export default function ClientList({ clients, rows, onSelect, selectedName, onSelectProduct }) {
+  const [search] = useState("");
   const [mlUser, setMlUser] = useState("");
   const [scoreFilter, setScoreFilter] = useState("all");
   const [sortBy, setSortBy] = useState(SORT.SCORE_ASC);
@@ -114,13 +148,34 @@ export default function ClientList({ clients, rows, onSelect, selectedName }) {
   const deferredScoreFilter = useDeferredValue(scoreFilter);
   const deferredSortBy = useDeferredValue(sortBy);
 
+  const clientSkus = useMemo(() => {
+    const map = {};
+    for (const row of rows) {
+      const client = row[FIELDS.RAZON_SOCIAL] ?? "Sin nombre";
+      const sku = row[FIELDS.SKU];
+      if (!sku || sku === "None" || sku === "nan") continue;
+      if (!map[client]) map[client] = [];
+      if (!map[client].includes(sku)) map[client].push(sku);
+    }
+    for (const client of Object.keys(map)) {
+      map[client].sort();
+    }
+    return map;
+  }, [rows]);
+
   const sorted = useMemo(() => {
     setPage(0);
     const q = deferredSearch.trim().toLowerCase();
     const filtered = clients.filter((c) => {
       if (deferredMlUser && c.usuario !== deferredMlUser) return false;
-      if (q && !c.name.toLowerCase().includes(q) && !c.usuario.toLowerCase().includes(q))
-        return false;
+      if (q) {
+        const nameMatch = c.name.toLowerCase().includes(q);
+        const usuarioMatch = c.usuario.toLowerCase().includes(q);
+        const skuMatch = clientSkus[c.name]
+          ? clientSkus[c.name].some((s) => s.toLowerCase().includes(q))
+          : false;
+        if (!nameMatch && !usuarioMatch && !skuMatch) return false;
+      }
       if (deferredScoreFilter !== "all") {
         const f = SCORE_FILTERS.find((x) => x.value === deferredScoreFilter);
         if (f && (c.avgScore < f.min || c.avgScore > f.max)) return false;
@@ -128,7 +183,7 @@ export default function ClientList({ clients, rows, onSelect, selectedName }) {
       return true;
     });
     return applySort(filtered, deferredSortBy);
-  }, [clients, deferredSearch, deferredMlUser, deferredScoreFilter, deferredSortBy]);
+  }, [clients, clientSkus, deferredSearch, deferredMlUser, deferredScoreFilter, deferredSortBy]);
 
   const visible = (page + 1) * PAGE_SIZE;
   const shown = sorted.slice(0, visible);
@@ -149,17 +204,6 @@ export default function ClientList({ clients, rows, onSelect, selectedName }) {
     <div className="client-list-wrap">
       <div className="search-wrap">
         <UserDropdown rows={rows} selected={mlUser} onChange={setMlUser} />
-      </div>
-
-      <div className="search-wrap">
-        <input
-          className="search-input"
-          type="text"
-          placeholder="Buscar razón social…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        {search && <button className="search-clear" onClick={() => setSearch("")}>✕</button>}
       </div>
 
       <div className="list-controls">
@@ -187,6 +231,11 @@ export default function ClientList({ clients, rows, onSelect, selectedName }) {
                 <div className="client-info">
                   <span className="client-name">{c.name}</span>
                   {c.usuario && <span className="client-usuario">{c.usuario}</span>}
+                  {clientSkus[c.name] && clientSkus[c.name].length > 0 && (
+                    <span className="client-usuario">
+                      <ProductDropdown skus={clientSkus[c.name]} onSelect={(s) => onSelectProduct && onSelectProduct(s)} />
+                    </span>
+                  )}
                 </div>
                 <span className={`score-badge ${scoreClass(c.avgScore)}`}>{c.avgScore}</span>
               </li>

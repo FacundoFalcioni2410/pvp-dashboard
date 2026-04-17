@@ -9,6 +9,14 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
+      '/upload-thresholds': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/datasets': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
       '/data': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
@@ -18,6 +26,10 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/health': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/compare': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },

@@ -53,11 +53,15 @@ Desde la raíz del proyecto (`excel-dashboard/`):
 
 ```bash
 # Dependencias del frontend + script de arranque
-npm install
+cd frontend && npm install && cd ..
 
 # Dependencias del backend
 pip install -r backend/requirements.txt
+
+npm install -g concurrency
 ```
+
+
 
 ---
 

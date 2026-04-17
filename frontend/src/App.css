@@ -2,6 +2,7 @@
   --bg: #0f0f1a;
   --surface: #1a1a2e;
   --surface2: #22223a;
+  --surface3: #2a2a3a;
   --border: #2e2e4a;
   --text: #e0e0f0;
   --text-muted: #8888aa;
@@ -11,6 +12,35 @@
   --orange: #f97316;
   --red: #ef4444;
   --radius: 8px;
+}
+
+html[data-theme="light"],
+:root[data-theme="light"] {
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --surface2: #f0f0f5;
+  --surface3: #e8e8f0;
+  --border: #e0e0e8;
+  --text: #1a1a2e;
+  --text-muted: #6b6b8a;
+}
+
+.theme-toggle {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 6px 10px;
+  line-height: 1;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 * {
@@ -26,6 +56,11 @@ html, body {
   color: var(--text);
   font-family: "Inter", system-ui, sans-serif;
   font-size: 14px;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+*, *::before, *::after {
+  transition: background 0.3s ease, background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 ::-webkit-scrollbar {
@@ -55,6 +90,8 @@ html, body {
   margin: 0 auto;
   padding: 16px 20px 8px;
   overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
 }
 
 .app-header {
@@ -145,6 +182,56 @@ html, body {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* ── Compare picker ── */
+.compare-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.compare-picker-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.compare-picker-select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.compare-picker-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ── Compare view ── */
+.compare-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.compare-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.compare-count {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 /* ── Toolbar ── */
@@ -580,13 +667,43 @@ html, body {
 }
 
 .chart-header h3 {
-  margin-bottom: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.summary-stats {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.stat-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 100px;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-top: 4px;
 }
 
 .date-dropdown-wrap {
-  padding: 0 0 8px;
+  position: relative;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 6px;
 }
 
 .date-dropdown-wrap .filter-trigger {
@@ -964,10 +1081,11 @@ html, body {
 .detail-table td {
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 0;
 }
 
 .detail-table th {
-  overflow: visible;
+  overflow: hidden;
 }
 
 .detail-table th {
@@ -995,6 +1113,69 @@ html, body {
 .sort-arrow {
   font-size: 10px;
   margin-left: 2px;
+}
+
+.clickable-cell {
+  cursor: pointer;
+  color: var(--text);
+  transition: color 0.15s;
+}
+
+.clickable-cell:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.clickable-product {
+  cursor: pointer;
+  color: var(--accent);
+  transition: color 0.15s;
+}
+
+.clickable-product:hover {
+  text-decoration: underline;
+}
+
+.copy-msg-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.copy-msg-btn:hover {
+  background: var(--surface2);
+}
+
+.detail-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-tab {
+  padding: 6px 16px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.detail-tab:hover {
+  background: var(--surface2);
+}
+
+.detail-tab.active {
+  background: var(--surface);
+  color: var(--text);
+  border-bottom-color: var(--surface);
 }
 
 .col-resize-handle {
@@ -1039,9 +1220,299 @@ html, body {
   background: var(--surface2);
 }
 
+/* ── Sidebar tabs ── */
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sidebar-tab {
+  flex: 1;
+  padding: 10px 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.sidebar-tab:hover {
+  color: var(--text);
+}
+
+.sidebar-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Product threshold tag ── */
+.product-threshold-tag {
+  display: inline-block;
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--accent);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+}
+
+.product-threshold-tag--lg {
+  font-size: 12px;
+  padding: 3px 8px;
+}
+
+/* ── Threshold upload ── */
+.threshold-upload {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.threshold-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.threshold-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--surface2);
+}
+
+.threshold-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.threshold-count-badge {
+  background: var(--green);
+  color: #000;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 1px 6px;
+  line-height: 1.4;
+}
+
+.threshold-error {
+  font-size: 12px;
+  color: var(--red);
+}
+
+/* ── Dataset picker ── */
+.dataset-picker {
+  position: relative;
+}
+
+.dataset-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.dataset-trigger:hover,
+.dataset-trigger.open {
+  border-color: var(--accent);
+  background: var(--surface2);
+}
+
+.dataset-trigger-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.dataset-trigger-label {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dataset-count-badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 1px 6px;
+  line-height: 1.4;
+}
+
+.dataset-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 300px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  z-index: 200;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+}
+
+.dataset-dropdown-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dataset-list {
+  list-style: none;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.dataset-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.12s;
+}
+
+.dataset-item:last-child {
+  border-bottom: none;
+}
+
+.dataset-item:hover {
+  background: var(--surface);
+}
+
+.dataset-item.active {
+  background: rgba(99, 102, 241, 0.1);
+  border-left: 3px solid var(--accent);
+  padding-left: 11px;
+}
+
+.dataset-item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dataset-item-name {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dataset-item-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.dataset-active-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.dataset-delete-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.dataset-delete-btn:hover:not(:disabled) {
+  background: var(--red);
+  color: #fff;
+  border-color: var(--red);
+}
+
+.dataset-delete-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .td-desc {
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.compare-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.compare-selectors {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+}
+
+.compare-selectors select {
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.compare-results {
+  flex: 1;
+  overflow: auto;
+}
+
+.compare-summary {
+  margin-bottom: 12px;
+  color: var(--text-muted);
+}
+
+.sf-btn.sf-blue {
+  background: var(--accent);
+  color: white;
 }

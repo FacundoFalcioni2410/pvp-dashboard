@@ -1,27 +1,59 @@
 import { useState, useRef, useCallback, useMemo } from "react";
-import DateDropdown from "./DateDropdown";
+import CompareView from "./CompareView";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
 } from "recharts";
 import { scoreColor, fmt, fmtPct, FIELDS } from "../utils/score";
+import { getTooltipStyle } from "../utils/theme";
 
 const PAGE_SIZE = 50;
 
+function round(val, decimals) {
+  return Math.round(val * Math.pow(10, decimals)) / Math.pow(10, decimals);
+}
+
+function buildMessage(descripcion, pvp, allowedPct) {
+  const pct = allowedPct ?? 15;
+  const desc = descripcion || "el producto";
+  const pvpNum = parseFloat(pvp);
+  const calculated = !isNaN(pvpNum) ? Math.round(pvpNum * (1 - pct / 100)) : "—";
+  return `Buenas días! Como están? Les envío esta publicación por ${desc}. Les pido si me ayudan subiéndolo a partir de ${calculated}`;
+}
+
+function CopyButton({ row }) {
+  const [copied, setCopied] = useState(false);
+  const desc = row[FIELDS.DESCRIPCION];
+  const pvp = row[FIELDS.PVP];
+  const allowed = row.allowed_pct;
+
+  const msg = buildMessage(desc, pvp, allowed);
+
+  const handleCopy = async (e) => {
+    e.stopPropagation();
+    await navigator.clipboard.writeText(msg);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <button className="copy-msg-btn" onClick={handleCopy} title="Copiar mensaje">
+      {copied ? "✓" : "📋"}
+    </button>
+  );
+}
+
 const COLUMNS = [
-  { key: FIELDS.FECHA, label: "Fecha", defaultW: 110, sortable: true },
-  { key: FIELDS.SKU, label: "SKU", defaultW: 110, sortable: true },
-  { key: FIELDS.DESCRIPCION, label: "Descripción", defaultW: 240, sortable: false },
-  { key: FIELDS.PRECIO, label: "Precio", defaultW: 110, sortable: true },
-  { key: FIELDS.PVP, label: "PVP", defaultW: 100, sortable: true },
-  { key: FIELDS.PCT_DIF, label: "% Dif PVP", defaultW: 100, sortable: true },
-  { key: "_score", label: "Score", defaultW: 72, sortable: true },
+  { key: FIELDS.FECHA, label: "Fecha", defaultW: 110, sortable: true, resizable: true },
+  { key: FIELDS.SKU, label: "SKU", defaultW: 110, sortable: true, resizable: true },
+  { key: FIELDS.DESCRIPCION, label: "Descripción", defaultW: 250, sortable: false, resizable: true },
+  { key: FIELDS.PRECIO, label: "Precio", defaultW: 100, sortable: true, resizable: true },
+  { key: FIELDS.PVP, label: "PVP", defaultW: 90, sortable: true, resizable: true },
+  { key: FIELDS.PCT_DIF, label: "% Dif PVP", defaultW: 90, sortable: true, resizable: true },
+  { key: "_allowed_pct", label: "Permitido", defaultW: 80, sortable: true, resizable: true },
+  { key: "_score", label: "Score", defaultW: 70, sortable: true, resizable: true },
+  { key: "_copy", label: "", defaultW: 40, sortable: false, resizable: false },
 ];
 
-const TOOLTIP_STYLE = {
-  contentStyle: { background: "#1e1e2e", border: "1px solid #444", color: "#e0e0f0" },
-  labelStyle: { color: "#e0e0f0" },
-  itemStyle: { color: "#e0e0f0" },
-};
 
 function useColumnResize() {
   const [widths, setWidths] = useState(
@@ -51,7 +83,7 @@ function useColumnResize() {
 
         setWidths((prev) => ({
           ...prev,
-          [drag.current.key]: Math.max(30, drag.current.startW + delta),
+          [drag.current.key]: Math.max(50, drag.current.startW + delta),
         }));
       });
     };
@@ -119,10 +151,11 @@ function useRowHeight() {
   return { rowHeight, onRowResizeMouseDown: onMouseDown };
 }
 
-export default function ClientDetail({ client, onClose, pctThreshold = null, onSetFilter, dates = [], selectedDate, onDateChange }) {
+export default function ClientDetail({ client, onClose, pctThreshold = null, onSetFilter, dates = [], selectedDate, onDateChange, onSelectProduct }) {
   const [visibleRows, setVisibleRows] = useState(PAGE_SIZE);
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
+  const [activeTab, setActiveTab] = useState("activity");
   const { widths, onMouseDown } = useColumnResize();
   const { rowHeight, onRowResizeMouseDown } = useRowHeight();
 
@@ -135,6 +168,9 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
       if (sortCol === "_score") {
         valA = a.score ?? 0;
         valB = b.score ?? 0;
+      } else if (sortCol === "_allowed_pct") {
+        valA = a.allowed_pct ?? -1;
+        valB = b.allowed_pct ?? -1;
       } else {
         valA = a[sortCol] ?? "";
         valB = b[sortCol] ?? "";
@@ -148,15 +184,40 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
     });
   }, [rows, sortCol, sortDir]);
 
-  const chartData = useMemo(() =>
-    sortedRows.slice(-60).map((r, i) => ({
-      name: r[FIELDS.FECHA]
-        ? String(r[FIELDS.FECHA]).slice(0, 10)
-        : `#${i + 1}`,
-      score: r.score ?? 0,
-      sku: r[FIELDS.SKU] ?? "",
-    })),
-  [sortedRows]);
+  const chartData = useMemo(() => {
+    const dateCounts = {};
+    for (const r of sortedRows) {
+      const fecha = r[FIELDS.FECHA];
+      const date = fecha ? String(fecha).slice(0, 10) : "Sin fecha";
+      dateCounts[date] = (dateCounts[date] || 0) + 1;
+    }
+    return Object.entries(dateCounts)
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-20);
+  }, [sortedRows]);
+
+  const priceEvolution = useMemo(() => {
+    const bySku = {};
+    for (const r of rows) {
+      const sku = r[FIELDS.SKU] || "Sin SKU";
+      const pct = parseFloat(r.normalized_pct);
+      if (!isNaN(pct)) {
+        if (!bySku[sku]) bySku[sku] = [];
+        bySku[sku].push({ pct, fecha: r[FIELDS.FECHA] });
+      }
+    }
+    const result = [];
+    for (const [sku, arr] of Object.entries(bySku)) {
+      if (arr.length >= 2) {
+        const first = arr[0].pct;
+        const last = arr[arr.length - 1].pct;
+        const diff = last - first;
+        result.push({ sku, first, last, diff: round(diff, 1) });
+      }
+    }
+    return result.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+  }, [rows]);
 
   const shownRows = useMemo(
     () => sortedRows.slice(0, visibleRows),
@@ -190,33 +251,83 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
         )}
         <button className="close-btn" onClick={onClose}>✕</button>
       </div>
-      <DateDropdown dates={dates} selected={selectedDate} onChange={onDateChange} />
+      <div className="detail-tabs">
+        <button className={`detail-tab ${activeTab === "activity" ? "active" : ""}`} onClick={() => setActiveTab("activity")}>
+          Actividad
+        </button>
+        <button className={`detail-tab ${activeTab === "evolution" ? "active" : ""}`} onClick={() => setActiveTab("evolution")}>
+          Evolución % PVP
+        </button>
+        <button className={`detail-tab ${activeTab === "compare" ? "active" : ""}`} onClick={() => setActiveTab("compare")}>
+          Comparar datasets
+        </button>
+      </div>
 
+      {activeTab === "activity" && (
       <div className="detail-chart">
         <h3>
-          Score por operación {rows.length > 60 ? "(últimas 60)" : ""}
+          Publicaciones por día ({chartData.length} días)
         </h3>
 
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3a" />
-            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-            <YAxis domain={[0, 10]} tick={{ fontSize: 10 }} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
+            <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 10 }} />
 
             <Tooltip
-              {...TOOLTIP_STYLE}
-              cursor={{ fill: "rgba(255,255,255,0.04)" }}
-              formatter={(v, _, p) => [`Score: ${v}`, p.payload.sku || "SKU"]}
+              {...getTooltipStyle()}
+              formatter={(v) => [`${v} publicaciones`, "Cantidad"]}
             />
 
-            <Bar dataKey="score" radius={[3, 3, 0, 0]} isAnimationActive={false}>
-              {chartData.map((entry, i) => (
-                <Cell key={i} fill={scoreColor(entry.score)} />
-              ))}
-            </Bar>
+            <Bar dataKey="count" radius={[3, 3, 0, 0]} fill="#6366f1" isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       </div>
+      )}
+
+      {activeTab === "evolution" && priceEvolution.length > 0 && (
+        <div className="detail-chart">
+          <h3>Evolución de % PVP (primer vs último registro por SKU)</h3>
+          <table className="detail-table" style={{ fontSize: 12 }}>
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Primero</th>
+                <th>Último</th>
+                <th>Diferencia</th>
+              </tr>
+            </thead>
+            <tbody>
+              {priceEvolution.slice(0, 15).map((e, i) => (
+                <tr key={i}>
+                  <td
+                    className="clickable-cell"
+                    onClick={() => onSelectProduct && onSelectProduct(e.sku)}
+                    title="Ver producto"
+                  >
+                    {e.sku}
+                  </td>
+                  <td>{e.first?.toFixed(1)}%</td>
+                  <td>{e.last?.toFixed(1)}%</td>
+                  <td style={{ color: e.diff > 0 ? "#22c55e" : e.diff < 0 ? "#ef4444" : "inherit", fontWeight: "bold" }}>
+                    {e.diff > 0 ? "+" : ""}{e.diff}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {activeTab === "compare" && (
+        <CompareView
+          client={client.name}
+          onSelectItem={(sku) => onSelectProduct && onSelectProduct(sku)}
+        />
+      )}
+
+      {activeTab === "activity" && (
 
       <div className="detail-toolbar">
         <div className="detail-deviation-filters">
@@ -233,15 +344,17 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
           )}
         </div>
       </div>
+      )}
 
-      <div className="detail-table-wrap" onMouseDown={onRowResizeMouseDown}>
+      {activeTab !== "compare" && <>
+      <div className="detail-table-wrap">
         <table
           className="detail-table"
-          style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}
+          style={{ tableLayout: "auto", width: "100%" }}
         >
           <colgroup>
             {COLUMNS.map((c) => (
-              <col key={c.key} style={{ width: widths[c.key] }} />
+              <col key={c.key} style={{ minWidth: widths[c.key] }} />
             ))}
           </colgroup>
 
@@ -251,16 +364,18 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
                 <th
                   key={c.key}
                   className={c.sortable ? "sortable" : ""}
-                  onClick={() => handleSort(c)}
+                  onClick={() => c.sortable && handleSort(c)}
                 >
                   {c.label}
-                  {sortCol === c.key && (
+                  {sortCol === c.key && c.sortable && (
                     <span className="sort-arrow">{sortDir === "asc" ? " ↑" : " ↓"}</span>
                   )}
-                  <span
-                    className="col-resize-handle"
-                    onMouseDown={(e) => { e.stopPropagation(); onMouseDown(c.key, e); }}
-                  />
+                  {c.resizable && (
+                    <span
+                      className="col-resize-handle"
+                      onMouseDown={(e) => { e.stopPropagation(); onMouseDown(c.key, e); }}
+                    />
+                  )}
                 </th>
               ))}
             </tr>
@@ -277,7 +392,13 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
             {shownRows.map((r, i) => (
               <tr key={i} style={{ height: rowHeight }}>
                 <td>{fmt(r[FIELDS.FECHA])}</td>
-                <td>{fmt(r[FIELDS.SKU])}</td>
+                <td
+                  className="clickable-cell"
+                  onClick={() => onSelectProduct && onSelectProduct(r[FIELDS.SKU])}
+                  title="Ver producto"
+                >
+                  {fmt(r[FIELDS.SKU])}
+                </td>
 
                 <td style={{
                   overflow: "hidden",
@@ -289,7 +410,11 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
 
                 <td>{fmt(r[FIELDS.PRECIO])}</td>
                 <td>{fmt(r[FIELDS.PVP])}</td>
-                <td>{fmtPct(r[FIELDS.PCT_DIF])}</td>
+                <td>{fmtPct(r, FIELDS.PCT_DIF)}</td>
+
+                <td style={{ color: "var(--text-muted)" }}>
+                  {r.allowed_pct != null ? `${r.allowed_pct}%` : "15%"}
+                </td>
 
                 <td>
                   <span
@@ -298,6 +423,10 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
                   >
                     {r.score ?? "—"}
                   </span>
+                </td>
+
+                <td>
+                  <CopyButton row={r} />
                 </td>
               </tr>
             ))}
@@ -313,6 +442,7 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
           Cargar {Math.min(remaining, PAGE_SIZE)} más ({remaining} restantes)
         </button>
       )}
+      </>}
     </div>
   );
 }
