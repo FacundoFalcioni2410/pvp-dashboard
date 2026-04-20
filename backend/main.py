@@ -399,6 +399,7 @@ def build_high_deviation_chart(rows: list[dict], threshold: int = 40) -> list:
                 "pctHighDeviation": round(100 * d["count"] / d["total"], 1),
                 "usuario": d["usuario"],
             })
+    results = [r for r in results if r["count"] > 0]
     results.sort(key=lambda x: x["pctHighDeviation"], reverse=True)
     return results[:20]
 
