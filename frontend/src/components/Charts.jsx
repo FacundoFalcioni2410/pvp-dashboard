@@ -143,6 +143,7 @@ const InfractionPanel = memo(function InfractionPanel({ data, onSelect }) {
     [data, sortBy]
   );
   const maxCount = useMemo(() => Math.max(...data.map((d) => d.count), 1), [data]);
+  const maxPct = useMemo(() => Math.max(...data.map((d) => d.pctInfraccion), 1), [data]);
   const byPct = sortBy === "pct";
   const h = Math.max(sorted.length * 32 + 20, 120);
   return (
@@ -156,7 +157,7 @@ const InfractionPanel = memo(function InfractionPanel({ data, onSelect }) {
         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
         <XAxis
           type="number"
-          domain={byPct ? [0, 100] : [0, maxCount]}
+          domain={byPct ? [0, maxPct] : [0, maxCount]}
           tick={{ fontSize: 11 }}
           tickFormatter={byPct ? (v) => `${v}%` : undefined}
         />
@@ -196,6 +197,7 @@ const HighDeviationPanel = memo(function HighDeviationPanel({ data, onSelect }) 
     [data, sortBy]
   );
   const maxCount = useMemo(() => Math.max(...data.map((d) => d.count), 1), [data]);
+  const maxPct = useMemo(() => Math.max(...data.map((d) => d.pctHighDeviation), 1), [data]);
   const byPct = sortBy === "pct";
   const h = Math.max(sorted.length * 32 + 20, 120);
   return (
@@ -209,7 +211,7 @@ const HighDeviationPanel = memo(function HighDeviationPanel({ data, onSelect }) 
         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
         <XAxis
           type="number"
-          domain={byPct ? [0, 100] : [0, maxCount]}
+          domain={byPct ? [0, maxPct] : [0, maxCount]}
           tick={{ fontSize: 11 }}
           tickFormatter={byPct ? (v) => `${v}%` : undefined}
         />
