@@ -68,6 +68,8 @@ function Dashboard() {
   const scatter = dashboardData?.scatter ?? [];
   const infractionChart = dashboardData?.infractionChart ?? [];
   const highDeviationChart = dashboardData?.highDeviationChart ?? [];
+  const skuDeviationChart = dashboardData?.skuDeviationChart ?? [];
+  const rotChart = dashboardData?.rotChart ?? [];
 
   const isProductMode = location.pathname.startsWith("/product/");
   const isClientMode = location.pathname.startsWith("/client/");
@@ -187,7 +189,10 @@ function Dashboard() {
                 scatter={scatter}
                 infractionChart={infractionChart}
                 highDeviationChart={highDeviationChart}
+                skuDeviationChart={skuDeviationChart}
+                rotChart={rotChart}
                 onSelect={handleSelectClient}
+                onSelectSku={(sku) => navigate(`/product/${encodeURIComponent(sku)}`)}
               />
             </div>
             <ScoreLegend />

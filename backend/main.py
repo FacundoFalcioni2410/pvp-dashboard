@@ -29,6 +29,7 @@ MLA_COL = "MLA"
 PRECIO_COL = "Precio"
 SKU_COL = "SKU"
 PVP_COL = "PVP"
+ROT_COL = "ROT"
 
 BACKEND_DIR = Path(__file__).parent
 DATASETS_DIR = BACKEND_DIR / "datasets"
@@ -422,6 +423,70 @@ def enrich_rows(rows: list[dict]) -> list[dict]:
     return rows
 
 
+def build_sku_deviation_chart(rows: list[dict], threshold: int = 15) -> list:
+    deduped = _deduplicate_by_mla_day(rows)
+    smap = defaultdict(lambda: {"count": 0, "total": 0, "descripcion": "", "rot": ""})
+    for row in deduped:
+        if (row.get(TIPO_CLIENTE_COL) or "").strip() == "CONTRABANDO":
+            continue
+        sku = (row.get(SKU_COL) or row.get(MLA_COL) or "Sin SKU").strip()
+        pct = normalise_pct(row.get(PCT_DIF_COL))
+        smap[sku]["total"] += 1
+        smap[sku]["descripcion"] = (row.get("DESCRIPCION") or "").strip()
+        if not smap[sku]["rot"]:
+            smap[sku]["rot"] = (row.get(ROT_COL) or "").strip().upper()
+        if pct is not None and abs(pct) >= threshold:
+            smap[sku]["count"] += 1
+    results = []
+    for sku, d in smap.items():
+        if d["count"] > 0:
+            results.append({
+                "sku": sku,
+                "name": sku,
+                "count": d["count"],
+                "total": d["total"],
+                "pctInfraccion": round(100 * d["count"] / d["total"]),
+                "descripcion": d["descripcion"],
+                "rot": d["rot"],
+            })
+    results.sort(key=lambda x: x["count"], reverse=True)
+    return results[:20]
+
+
+ROT_ORDER = ["A", "B", "C", "D", "S", "U"]
+
+def build_rot_chart(rows: list[dict], threshold: int = 15) -> list:
+    rmap = defaultdict(lambda: {"scores": [], "infraction_count": 0, "total": 0})
+    for row in rows:
+        if (row.get(TIPO_CLIENTE_COL) or "").strip() == "CONTRABANDO":
+            continue
+        rot = (row.get(ROT_COL) or "").strip().upper()
+        if not rot:
+            continue
+        pct = normalise_pct(row.get(PCT_DIF_COL))
+        score = row.get("score")
+        rmap[rot]["total"] += 1
+        if score is not None:
+            try:
+                rmap[rot]["scores"].append(int(score))
+            except (ValueError, TypeError):
+                pass
+        if pct is not None and abs(pct) >= threshold:
+            rmap[rot]["infraction_count"] += 1
+    results = []
+    for rot, d in rmap.items():
+        scores = d["scores"]
+        results.append({
+            "rot": rot,
+            "name": rot,
+            "avgScore": round(sum(scores) / len(scores)) if scores else 0,
+            "pctInfraccion": round(100 * d["infraction_count"] / d["total"]) if d["total"] else 0,
+            "total": d["total"],
+        })
+    results.sort(key=lambda x: ROT_ORDER.index(x["rot"]) if x["rot"] in ROT_ORDER else 99)
+    return results
+
+
 def build_response(rows: list[dict]) -> str:
     rows = enrich_rows(rows)
     body = {
@@ -431,6 +496,8 @@ def build_response(rows: list[dict]) -> str:
         "scatter": build_scatter_data(rows),
         "infractionChart": build_infraction_chart(rows),
         "highDeviationChart": build_high_deviation_chart(rows),
+        "skuDeviationChart": build_sku_deviation_chart(rows),
+        "rotChart": build_rot_chart(rows),
         "thresholdCount": get_threshold_count(),
     }
     return json.dumps(body, ensure_ascii=False)
