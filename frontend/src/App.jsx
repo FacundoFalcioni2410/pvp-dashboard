@@ -201,7 +201,7 @@ function Dashboard() {
 export default function App() {
   const navigate = useNavigate();
   const { theme, toggle: toggleTheme } = useTheme();
-  const { dashboardData, setDashboardData, loading, thresholdCount, setThresholdCount, datasets } = useDashboard();
+  const { dashboardData, setDashboardData, loading, loadingData, thresholdCount, setThresholdCount, datasets } = useDashboard();
 
   const rows = dashboardData?.rows ?? [];
 
@@ -217,6 +217,11 @@ export default function App() {
 
   return (
     <div className="app">
+      {loadingData && (
+        <div className="data-loading-overlay">
+          <div className="full-page-spinner" />
+        </div>
+      )}
       <header className="app-header">
         <h1>Control de Precios Dashboard</h1>
         <button className="theme-toggle" onClick={toggleTheme} title="Cambiar tema">

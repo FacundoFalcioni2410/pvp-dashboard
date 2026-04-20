@@ -38,12 +38,13 @@ export function fmtPct(row, field) {
   if (val == null) return "—";
   const n = parseFloat(val);
   if (isNaN(n)) return "—";
-  return `${n.toFixed(1)}%`;
+  return `${Math.round(n)}%`;
 }
 
 export function fmt(val) {
   if (val == null) return "—";
-  if (typeof val === "number") return val.toLocaleString("es-AR");
+  const n = typeof val === "number" ? val : parseFloat(val);
+  if (!isNaN(n)) return n.toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   return String(val);
 }
 

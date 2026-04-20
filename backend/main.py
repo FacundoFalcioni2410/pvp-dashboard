@@ -339,7 +339,7 @@ def build_scatter_data(rows: list[dict], max_points: int = 500) -> list:
         score = row.get("score")
         if pct is not None and score is not None:
             scatter.append({
-                "pct": round(abs(pct), 1),
+                "pct": round(abs(pct)),
                 "score": int(score),
                 "client": (row.get(RAZON_SOCIAL_COL) or "—").strip(),
             })
@@ -369,7 +369,7 @@ def build_infraction_chart(rows: list[dict], threshold: int = 15) -> list:
                 "fullName": name,
                 "count": d["count"],
                 "total": d["total"],
-                "pctInfraccion": round(100 * d["count"] / d["total"], 1),
+                "pctInfraccion": round(100 * d["count"] / d["total"]),
                 "usuario": d["usuario"],
             })
     results.sort(key=lambda x: x["pctInfraccion"], reverse=True)
@@ -396,7 +396,7 @@ def build_high_deviation_chart(rows: list[dict], threshold: int = 40) -> list:
                 "fullName": name,
                 "count": d["count"],
                 "total": d["total"],
-                "pctHighDeviation": round(100 * d["count"] / d["total"], 1),
+                "pctHighDeviation": round(100 * d["count"] / d["total"]),
                 "usuario": d["usuario"],
             })
     results = [r for r in results if r["count"] > 0]
@@ -717,7 +717,7 @@ def compare_data(
                     groups[key].append(float(pct))
                 except (ValueError, TypeError):
                     pass
-        return {k: (round(sum(v) / len(v), 1), len(v)) for k, v in groups.items() if v}
+        return {k: (round(sum(v) / len(v)), len(v)) for k, v in groups.items() if v}
 
     rows1 = get_all_rows(dataset1_id)
     rows2 = get_all_rows(dataset2_id)
@@ -743,7 +743,7 @@ def compare_data(
         count1 = entry1[1] if entry1 else 0
         avg2 = entry2[0] if entry2 else None
         count2 = entry2[1] if entry2 else 0
-        delta = round(avg1 - avg2, 1) if avg1 is not None and avg2 is not None else None
+        delta = round(avg1 - avg2) if avg1 is not None and avg2 is not None else None
         items.append({
             "key": key,
             "avg1": avg1,

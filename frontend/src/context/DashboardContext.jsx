@@ -8,6 +8,7 @@ export function DashboardProvider({ children }) {
   const [activeDatasetId, setActiveDatasetId] = useState(null);
   const [thresholdCount, setThresholdCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingData, setLoadingData] = useState(false);
   const [compareDatasetId, setCompareDatasetId] = useState(null);
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export function DashboardProvider({ children }) {
   }, []);
 
   const setDateData = useCallback(async (date, datasetId) => {
+    setLoadingData(true);
     try {
       const id = datasetId ?? activeDatasetId;
       const params = new URLSearchParams({ date });
@@ -58,10 +60,13 @@ export function DashboardProvider({ children }) {
       }));
     } catch (err) {
       console.error("Failed to fetch date data:", err);
+    } finally {
+      setLoadingData(false);
     }
   }, [activeDatasetId]);
 
   const switchDataset = useCallback(async (datasetId) => {
+    setLoadingData(true);
     try {
       const res = await fetch(`/data?dataset_id=${datasetId}`);
       if (!res.ok) throw new Error(`Server error ${res.status}`);
@@ -76,6 +81,8 @@ export function DashboardProvider({ children }) {
       });
     } catch (err) {
       console.error("Failed to switch dataset:", err);
+    } finally {
+      setLoadingData(false);
     }
   }, [datasets]);
 
@@ -116,6 +123,7 @@ export function DashboardProvider({ children }) {
       setDashboardData,
       setDateData,
       loading,
+      loadingData,
       datasets,
       activeDatasetId,
       switchDataset,

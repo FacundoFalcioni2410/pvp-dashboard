@@ -1,15 +1,15 @@
 import { scoreClass } from "../utils/score";
 
 const ROWS = [
-  { range: "40%+", score: 1 },
-  { range: "35%",  score: 2 },
-  { range: "30%",  score: 3 },
-  { range: "25%",  score: 4 },
-  { range: "20%",  score: 5 },
-  { range: "15%",  score: 6 },
-  { range: "10%",  score: 7 },
-  { range: "5%",   score: 8 },
-  { range: "<5%",  score: 10 },
+  { range: "≥40%",      score: 1 },
+  { range: "35% - 40%", score: 2 },
+  { range: "30% - 35%", score: 3 },
+  { range: "25% - 30%", score: 4 },
+  { range: "20% - 25%", score: 5 },
+  { range: "15% - 20%", score: 6 },
+  { range: "10% - 15%", score: 7 },
+  { range: "5% - 10%",  score: 8 },
+  { range: "<5%",       score: 10 },
 ];
 
 export default function ScoreLegend() {
@@ -20,7 +20,7 @@ export default function ScoreLegend() {
       <div className="legend-rows">
         {ROWS.map(({ range, score }) => (
           <div key={score} className="legend-row">
-            <span className="legend-range">≤{range}</span>
+            <span className="legend-range">{range}</span>
             <div className="legend-bar-wrap">
               <div className="legend-bar" style={{ width: `${score * 10}%` }} />
             </div>

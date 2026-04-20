@@ -8,9 +8,6 @@ import { getTooltipStyle } from "../utils/theme";
 
 const PAGE_SIZE = 50;
 
-function round(val, decimals) {
-  return Math.round(val * Math.pow(10, decimals)) / Math.pow(10, decimals);
-}
 
 function buildMessage(descripcion, pvp, allowedPct) {
   const pct = allowedPct ?? 15;
@@ -210,10 +207,10 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
     const result = [];
     for (const [sku, arr] of Object.entries(bySku)) {
       if (arr.length >= 2) {
-        const first = arr[0].pct;
-        const last = arr[arr.length - 1].pct;
+        const first = Math.round(arr[0].pct);
+        const last = Math.round(arr[arr.length - 1].pct);
         const diff = last - first;
-        result.push({ sku, first, last, diff: round(diff, 1) });
+        result.push({ sku, first, last, diff });
       }
     }
     return result.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
@@ -308,10 +305,10 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
                   >
                     {e.sku}
                   </td>
-                  <td>{e.first?.toFixed(1)}%</td>
-                  <td>{e.last?.toFixed(1)}%</td>
+                  <td>{e.first != null ? Math.round(e.first) : "—"}%</td>
+                  <td>{e.last != null ? Math.round(e.last) : "—"}%</td>
                   <td style={{ color: e.diff > 0 ? "#22c55e" : e.diff < 0 ? "#ef4444" : "inherit", fontWeight: "bold" }}>
-                    {e.diff > 0 ? "+" : ""}{e.diff}%
+                    {e.diff > 0 ? "+" : ""}{Math.round(e.diff)}%
                   </td>
                 </tr>
               ))}

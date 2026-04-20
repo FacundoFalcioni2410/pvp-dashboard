@@ -160,6 +160,17 @@ html, body {
   background: var(--bg);
 }
 
+.data-loading-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 9999;
+  backdrop-filter: blur(2px);
+}
+
 .full-page-spinner {
   width: 40px;
   height: 40px;
@@ -773,7 +784,7 @@ html, body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 16px;
-  width: 200px;
+  width: 250px;
   flex-shrink: 0;
   align-self: flex-start;
 }
@@ -808,9 +819,10 @@ html, body {
 .legend-range {
   font-size: 11px;
   color: var(--text-muted);
-  width: 40px;
+  width: 72px;
   text-align: right;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .legend-bar-wrap {
