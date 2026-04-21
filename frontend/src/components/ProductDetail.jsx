@@ -95,7 +95,7 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
   const { widths, onMouseDown } = useColumnResize();
   const { activeDatasetId } = useDashboard();
 
-  useEffect(() => { setAllSkuRows(null); }, [sku]);
+  useEffect(() => { setAllSkuRows(null); }, [sku, activeDatasetId]);
 
   useEffect(() => {
     if (tab !== "evolution") return;
@@ -109,7 +109,7 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
         setAllSkuRows(skuRows);
       })
       .catch(() => setAllSkuRows([]));
-  }, [tab, sku, activeDatasetId, allSkuRows]);
+  }, [tab, sku, activeDatasetId]);
 
   const rows = useMemo(
     () => allRows.filter((r) => r[FIELDS.SKU] === sku),

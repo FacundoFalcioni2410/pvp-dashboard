@@ -217,7 +217,17 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
 
         if (evoFrom || evoTo) {
           const fromIdx = evoFrom ? sorted.findIndex((r) => r.fecha >= evoFrom) : 0;
-          const toIdx = evoTo ? sorted.findLastIndex((r) => r.fecha <= evoTo) : sorted.length - 1;
+          let toIdx = -1;
+          if (evoTo) {
+            for (let i = sorted.length - 1; i >= 0; i--) {
+              if (sorted[i].fecha <= evoTo) {
+                toIdx = i;
+                break;
+              }
+            }
+          } else {
+            toIdx = sorted.length - 1;
+          }
 
           if (fromIdx >= 0 && fromIdx < sorted.length) {
             firstPct = sorted[fromIdx].pct;
