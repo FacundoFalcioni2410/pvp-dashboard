@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import CompareView from "./CompareView";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
@@ -6,6 +6,7 @@ import {
 import { scoreColor, fmt, fmtPct, FIELDS } from "../utils/score";
 import DateRangePicker from "./DateRangePicker";
 import { getTooltipStyle } from "../utils/theme";
+import { useDashboard } from "../context/DashboardContext";
 
 const PAGE_SIZE = 50;
 
@@ -156,10 +157,30 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
   const [activeTab, setActiveTab] = useState("activity");
   const [evoFrom, setEvoFrom] = useState("");
   const [evoTo, setEvoTo] = useState("");
+  const [allClientRows, setAllClientRows] = useState(null);
   const { widths, onMouseDown } = useColumnResize();
   const { rowHeight, onRowResizeMouseDown } = useRowHeight();
+  const { activeDatasetId } = useDashboard();
 
   const rows = useMemo(() => client?.rows ?? [], [client]);
+
+  useEffect(() => { setAllClientRows(null); }, [client?.name, activeDatasetId]);
+
+  useEffect(() => {
+    if (activeTab !== "evolution") return;
+    if (allClientRows !== null) return;
+    const params = new URLSearchParams({ all_dates: "true" });
+    if (activeDatasetId != null) params.set("dataset_id", activeDatasetId);
+    fetch(`/data?${params}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const clientRows = (data.rows ?? []).filter((r) => r[FIELDS.RAZON_SOCIAL] === client?.name);
+        setAllClientRows(clientRows);
+      })
+      .catch(() => setAllClientRows([]));
+  }, [activeTab, client?.name, activeDatasetId]);
+
+  const evoRows = allClientRows ?? rows;
 
   const sortedRows = useMemo(() => {
     if (!sortCol) return rows;
@@ -199,60 +220,42 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
 
   const priceEvolution = useMemo(() => {
     const bySku = {};
-    for (const r of rows) {
+    const filtered = evoRows.filter((r) => {
+      const f = String(r[FIELDS.FECHA] ?? "").slice(0, 10);
+      if (!f) return false;
+      if (evoFrom && f < evoFrom) return false;
+      if (evoTo && f > evoTo) return false;
+      return true;
+    });
+
+    for (const r of filtered) {
       const sku = r[FIELDS.SKU] || "Sin SKU";
-      const pct = parseFloat(r.normalized_pct);
+      const pct = parseFloat(r.normalized_pct ?? r[FIELDS.PCT_DIF]);
       const fecha = r[FIELDS.FECHA];
       if (!isNaN(pct)) {
         if (!bySku[sku]) bySku[sku] = [];
         bySku[sku].push({ pct, fecha });
       }
     }
-    const result = [];
-    for (const [sku, arr] of Object.entries(bySku)) {
-      if (arr.length >= 2) {
-        const sorted = [...arr].sort((a, b) => a.fecha.localeCompare(b.fecha));
-        let firstPct = null;
-        let lastPct = null;
 
-        if (evoFrom || evoTo) {
-          const fromIdx = evoFrom ? sorted.findIndex((r) => r.fecha >= evoFrom) : 0;
-          let toIdx = -1;
-          if (evoTo) {
-            for (let i = sorted.length - 1; i >= 0; i--) {
-              if (sorted[i].fecha <= evoTo) {
-                toIdx = i;
-                break;
-              }
-            }
-          } else {
-            toIdx = sorted.length - 1;
-          }
-
-          if (fromIdx >= 0 && fromIdx < sorted.length) {
-            firstPct = sorted[fromIdx].pct;
-          }
-          if (toIdx >= 0 && toIdx >= fromIdx) {
-            lastPct = sorted[toIdx].pct;
-          }
-        } else {
-          firstPct = sorted[0].pct;
-          lastPct = sorted[sorted.length - 1].pct;
-        }
-
-        if (firstPct != null && lastPct != null) {
-          const diff = Math.round(lastPct) - Math.round(firstPct);
-          result.push({ sku, first: Math.round(firstPct), last: Math.round(lastPct), diff });
-        }
-      }
-    }
-    return result.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
-  }, [rows, evoFrom, evoTo]);
+    return Object.entries(bySku)
+      .filter(([, arr]) => (evoFrom || evoTo) ? arr.length >= 1 : arr.length >= 2)
+      .map(([sku, arr]) => {
+        const sorted = [...arr].sort((a, b) => String(a.fecha ?? "").localeCompare(String(b.fecha ?? "")));
+        const firstEntry = sorted[0];
+        const lastEntry = sorted[sorted.length - 1];
+        const first = Math.round(firstEntry.pct);
+        const last = Math.round(lastEntry.pct);
+        const diff = last - first;
+        return { sku, first, last, diff, firstDate: firstEntry.fecha, lastDate: lastEntry.fecha };
+      })
+      .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+  }, [evoRows, evoFrom, evoTo]);
 
   const availableDates = useMemo(() => {
-    const dates = rows.map((r) => r[FIELDS.FECHA]).filter(Boolean);
-    return [...new Set(dates)].sort();
-  }, [rows]);
+    const d = evoRows.map((r) => r[FIELDS.FECHA]).filter(Boolean).map((f) => String(f).slice(0, 10));
+    return [...new Set(d)].sort();
+  }, [evoRows]);
 
   const shownRows = useMemo(
     () => sortedRows.slice(0, visibleRows),
@@ -355,8 +358,14 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
                     >
                       {e.sku}
                     </td>
-                    <td>{e.first != null ? Math.round(e.first) : "—"}%</td>
-                    <td>{e.last != null ? Math.round(e.last) : "—"}%</td>
+                    <td>
+                      <span>{e.first != null ? Math.round(e.first) : "—"}%</span>
+                      <span style={{ display: "block", fontSize: 10, color: "var(--text-muted)" }}>{e.firstDate}</span>
+                    </td>
+                    <td>
+                      <span>{e.last != null ? Math.round(e.last) : "—"}%</span>
+                      <span style={{ display: "block", fontSize: 10, color: "var(--text-muted)" }}>{e.lastDate}</span>
+                    </td>
                     <td style={{ color: e.diff > 0 ? "#22c55e" : e.diff < 0 ? "#ef4444" : "inherit", fontWeight: "bold" }}>
                       {e.diff > 0 ? "+" : ""}{Math.round(e.diff)}%
                     </td>
