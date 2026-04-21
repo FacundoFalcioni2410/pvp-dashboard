@@ -253,7 +253,7 @@ const RotChart = memo(function RotChart({ data }) {
     <>
       <div className="chart-sort-btns">
         <button className={`chart-sort-btn ${byScore ? "active" : ""}`} onClick={() => setMetric("avgScore")}>Score promedio</button>
-        <button className={`chart-sort-btn ${!byScore ? "active" : ""}`} onClick={() => setMetric("pctInfraccion")}>% en infracción</button>
+        <button className={`chart-sort-btn ${!byScore ? "active" : ""}`} onClick={() => setMetric("pctInfraccion")}>% desvío</button>
       </div>
       <ResponsiveContainer width="100%" height={Math.max(data.length * 40 + 20, 120)}>
         <BarChart data={data} layout="vertical" margin={{ top: 4, right: 48, left: 16, bottom: 4 }}>
@@ -270,7 +270,7 @@ const RotChart = memo(function RotChart({ data }) {
                 <div style={getTooltipStyle().contentStyle}>
                   <p style={{ marginBottom: 4, fontWeight: 700 }}>Rotación {d.rot}</p>
                   <p>Score promedio: {d.avgScore}</p>
-                  <p>% en infracción: {d.pctInfraccion}%</p>
+                  <p>% desvío: {d.pctInfraccion}%</p>
                   <p>Publicaciones: {d.total}</p>
                 </div>
               );
@@ -303,20 +303,23 @@ const SkuDeviationPanel = memo(function SkuDeviationPanel({ data, onSelectSku })
     rotFilter ? data.filter((d) => d.rot === rotFilter) : data,
     [data, rotFilter]
   );
-  const sorted = useMemo(() =>
-    [...filtered].sort((a, b) => sortBy === "pct" ? b.pctInfraccion - a.pctInfraccion : b.count - a.count),
-    [filtered, sortBy]
-  );
+  const sorted = useMemo(() => {
+    const mapped = filtered.map(d => ({...d, absAvgPct: Math.abs(d.avgPct || 0)}));
+    return sortBy === "avgPct" 
+      ? [...mapped].sort((a, b) => b.absAvgPct - a.absAvgPct)
+      : [...mapped].sort((a, b) => b.count - a.count);
+  }, [filtered, sortBy]);
+
   const maxCount = useMemo(() => Math.max(...sorted.map((d) => d.count), 1), [sorted]);
-  const maxPct = useMemo(() => Math.max(...sorted.map((d) => d.pctInfraccion), 1), [sorted]);
+  const maxAbs = useMemo(() => Math.max(...sorted.map((d) => d.absAvgPct), 1), [sorted]);
   const h = Math.max(sorted.length * 32 + 20, 120);
-  const byPct = sortBy === "pct";
+  const byPct = sortBy === "avgPct";
 
   return (
     <>
       <div className="chart-sort-btns">
         <button className={`chart-sort-btn ${!byPct ? "active" : ""}`} onClick={() => setSortBy("count")}>Cantidad</button>
-        <button className={`chart-sort-btn ${byPct ? "active" : ""}`} onClick={() => setSortBy("pct")}>% en infracción</button>
+        <button className={`chart-sort-btn ${byPct ? "active" : ""}`} onClick={() => setSortBy("avgPct")}>% promedio de desvío</button>
       </div>
       {availableRots.length > 0 && (
         <div className="chart-sort-btns" style={{ marginTop: 4 }}>
@@ -331,7 +334,7 @@ const SkuDeviationPanel = memo(function SkuDeviationPanel({ data, onSelectSku })
       <ResponsiveContainer width="100%" height={h}>
         <BarChart data={sorted} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
-          <XAxis type="number" domain={byPct ? [0, maxPct] : [0, maxCount]} tick={{ fontSize: 11 }}
+          <XAxis type="number" domain={[0, byPct ? maxAbs : maxCount]} tick={{ fontSize: 11 }}
             tickFormatter={byPct ? (v) => `${v}%` : undefined} />
           <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 10 }} />
           <Tooltip
@@ -345,18 +348,18 @@ const SkuDeviationPanel = memo(function SkuDeviationPanel({ data, onSelectSku })
                   {d.descripcion && <p style={{ marginBottom: 4, color: "#aaa", fontSize: 11 }}>{d.descripcion}</p>}
                   {d.rot && <p style={{ marginBottom: 4, fontSize: 11 }}>Rotación: {d.rot}</p>}
                   <p>Publicaciones en infracción: {d.count} / {d.total}</p>
-                  <p>% en infracción: {d.pctInfraccion}%</p>
+                  {d.avgPct !== undefined && <p>Promedio desvío: {d.avgPct}%</p>}
                 </div>
               );
             }}
           />
-          <Bar dataKey={byPct ? "pctInfraccion" : "count"} radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelectSku?.(d.sku)} cursor="pointer">
+          <Bar dataKey={byPct ? "absAvgPct" : "count"} radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelectSku?.(d.sku)} cursor="pointer">
             {sorted.map((entry, i) => (
-              <Cell key={i} fill={entry.pctInfraccion >= 50 ? "#ef4444" : entry.pctInfraccion >= 25 ? "#f97316" : "#eab308"} />
+              <Cell key={i} fill={entry.avgPct <= -30 ? "#ef4444" : entry.avgPct <= -15 ? "#f97316" : "#eab308"} />
             ))}
-            <LabelList dataKey={byPct ? "pctInfraccion" : "count"} position="insideRight"
+            <LabelList dataKey={byPct ? "absAvgPct" : "count"} position="insideRight"
               style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }}
-              formatter={byPct ? (v) => `${v}%` : undefined} />
+              formatter={byPct ? (v) => `${-v}%` : undefined} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>

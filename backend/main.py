@@ -424,8 +424,9 @@ def enrich_rows(rows: list[dict]) -> list[dict]:
 
 
 def build_sku_deviation_chart(rows: list[dict], threshold: int = 15) -> list:
+    import math
     deduped = _deduplicate_by_mla_day(rows)
-    smap = defaultdict(lambda: {"count": 0, "total": 0, "descripcion": "", "rot": ""})
+    smap = defaultdict(lambda: {"count": 0, "total": 0, "pct_sum": 0, "descripcion": "", "rot": ""})
     for row in deduped:
         if (row.get(TIPO_CLIENTE_COL) or "").strip() == "CONTRABANDO":
             continue
@@ -435,17 +436,29 @@ def build_sku_deviation_chart(rows: list[dict], threshold: int = 15) -> list:
         smap[sku]["descripcion"] = (row.get("DESCRIPCION") or "").strip()
         if not smap[sku]["rot"]:
             smap[sku]["rot"] = (row.get(ROT_COL) or "").strip().upper()
+        if pct is not None:
+            smap[sku]["pct_sum"] += abs(pct)
         if pct is not None and abs(pct) >= threshold:
             smap[sku]["count"] += 1
     results = []
     for sku, d in smap.items():
         if d["count"] > 0:
+            avg_abs = d["pct_sum"] / d["total"] if d["total"] > 0 else 0
+            if avg_abs > 0:
+                if avg_abs - math.floor(avg_abs) >= 0.5:
+                    avg_pct = -math.ceil(avg_abs)
+                else:
+                    avg_pct = -math.floor(avg_abs)
+            else:
+                avg_pct = 0
+            avg_pct = max(-100, min(-1, avg_pct))
             results.append({
                 "sku": sku,
                 "name": sku,
                 "count": d["count"],
                 "total": d["total"],
                 "pctInfraccion": round(100 * d["count"] / d["total"]),
+                "avgPct": avg_pct,
                 "descripcion": d["descripcion"],
                 "rot": d["rot"],
             })
