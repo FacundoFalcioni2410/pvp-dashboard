@@ -137,29 +137,20 @@ const BarPanel = memo(function BarPanel({ clientData, onSelect }) {
 });
 
 const InfractionPanel = memo(function InfractionPanel({ data, onSelect }) {
-  const [sortBy, setSortBy] = useState("count");
   const sorted = useMemo(() =>
-    [...data].sort((a, b) => sortBy === "pct" ? b.pctInfraccion - a.pctInfraccion : b.count - a.count),
-    [data, sortBy]
+    [...data].sort((a, b) => b.count - a.count),
+    [data]
   );
   const maxCount = useMemo(() => Math.max(...data.map((d) => d.count), 1), [data]);
-  const maxPct = useMemo(() => Math.max(...data.map((d) => d.pctInfraccion), 1), [data]);
-  const byPct = sortBy === "pct";
   const h = Math.max(sorted.length * 32 + 20, 120);
   return (
-    <>
-      <div className="chart-sort-btns">
-        <button className={`chart-sort-btn ${!byPct ? "active" : ""}`} onClick={() => setSortBy("count")}>Cantidad</button>
-        <button className={`chart-sort-btn ${byPct ? "active" : ""}`} onClick={() => setSortBy("pct")}>% Desvío</button>
-      </div>
     <ResponsiveContainer width="100%" height={h}>
       <BarChart data={sorted} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
         <XAxis
           type="number"
-          domain={byPct ? [0, maxPct] : [0, maxCount]}
+          domain={[0, maxCount]}
           tick={{ fontSize: 11 }}
-          tickFormatter={byPct ? (v) => `${v}%` : undefined}
         />
         <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 10 }} />
         <Tooltip
@@ -176,44 +167,33 @@ const InfractionPanel = memo(function InfractionPanel({ data, onSelect }) {
             );
           }}
         />
-        <Bar dataKey={byPct ? "pctInfraccion" : "count"} radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelect?.(d, 15)} cursor="pointer">
+        <Bar dataKey="count" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelect?.(d, 15)} cursor="pointer">
           {sorted.map((entry, i) => (
             <Cell key={i} fill={entry.pctInfraccion >= 50 ? "#ef4444" : entry.pctInfraccion >= 30 ? "#f97316" : "#eab308"} />
           ))}
-          <LabelList dataKey={byPct ? "pctInfraccion" : "count"} position="insideRight"
-            style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }}
-            formatter={byPct ? (v) => `${v}%` : undefined} />
+          <LabelList dataKey="count" position="insideRight"
+            style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }} />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
-    </>
   );
 });
 
 const HighDeviationPanel = memo(function HighDeviationPanel({ data, onSelect }) {
-  const [sortBy, setSortBy] = useState("count");
   const sorted = useMemo(() =>
-    [...data].sort((a, b) => sortBy === "pct" ? b.pctHighDeviation - a.pctHighDeviation : b.count - a.count),
-    [data, sortBy]
+    [...data].sort((a, b) => b.count - a.count),
+    [data]
   );
   const maxCount = useMemo(() => Math.max(...data.map((d) => d.count), 1), [data]);
-  const maxPct = useMemo(() => Math.max(...data.map((d) => d.pctHighDeviation), 1), [data]);
-  const byPct = sortBy === "pct";
   const h = Math.max(sorted.length * 32 + 20, 120);
   return (
-    <>
-      <div className="chart-sort-btns">
-        <button className={`chart-sort-btn ${!byPct ? "active" : ""}`} onClick={() => setSortBy("count")}>Cantidad</button>
-        <button className={`chart-sort-btn ${byPct ? "active" : ""}`} onClick={() => setSortBy("pct")}>% Desvío</button>
-      </div>
     <ResponsiveContainer width="100%" height={h}>
       <BarChart data={sorted} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
         <XAxis
           type="number"
-          domain={byPct ? [0, maxPct] : [0, maxCount]}
+          domain={[0, maxCount]}
           tick={{ fontSize: 11 }}
-          tickFormatter={byPct ? (v) => `${v}%` : undefined}
         />
         <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 10 }} />
         <Tooltip
@@ -230,17 +210,15 @@ const HighDeviationPanel = memo(function HighDeviationPanel({ data, onSelect }) 
             );
           }}
         />
-        <Bar dataKey={byPct ? "pctHighDeviation" : "count"} radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelect?.(d, 40)} cursor="pointer">
+        <Bar dataKey="count" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelect?.(d, 40)} cursor="pointer">
           {sorted.map((entry, i) => (
             <Cell key={i} fill={entry.pctHighDeviation >= 30 ? "#ef4444" : entry.pctHighDeviation >= 15 ? "#f97316" : "#eab308"} />
           ))}
-          <LabelList dataKey={byPct ? "pctHighDeviation" : "count"} position="insideRight"
-            style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }}
-            formatter={byPct ? (v) => `${v}%` : undefined} />
+          <LabelList dataKey="count" position="insideRight"
+            style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }} />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
-    </>
   );
 });
 
