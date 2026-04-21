@@ -43,9 +43,10 @@ export function fmtPct(row, field) {
 
 export function fmt(val) {
   if (val == null) return "—";
-  const n = typeof val === "number" ? val : parseFloat(val);
-  if (!isNaN(n)) return n.toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-  return String(val);
+  if (typeof val === "number") return val.toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  const s = String(val).trim();
+  if (/^-?\d+(\.\d+)?$/.test(s)) return parseFloat(s).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  return s;
 }
 
 export function aggregateClients(rows) {

@@ -737,7 +737,7 @@ async def upload_excel(file: UploadFile = File(...)):
 
 
 @app.get("/data")
-def get_data(date: str = Query(default=None), dataset_id: int = Query(default=None)):
+def get_data(date: str = Query(default=None), dataset_id: int = Query(default=None), all_dates: bool = Query(default=False)):
     datasets = list_datasets_from_catalog()
     if not datasets:
         raise HTTPException(status_code=404, detail="No data loaded. Upload a file first.")
@@ -747,7 +747,7 @@ def get_data(date: str = Query(default=None), dataset_id: int = Query(default=No
         raise HTTPException(status_code=404, detail="Dataset not found")
 
     dates = query_dataset_dates(dataset_id)
-    resolved_date = date or (dates[0] if dates else None)
+    resolved_date = None if all_dates else (date or (dates[0] if dates else None))
     rows = query_dataset_rows(dataset_id, resolved_date)
 
     body = json.loads(build_response(rows))

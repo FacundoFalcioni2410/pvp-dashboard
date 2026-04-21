@@ -176,6 +176,7 @@ function Dashboard() {
           <ProductDetail
             sku={selectedSku}
             rows={rows}
+            dates={dates}
             onClose={handleClose}
             onSelectClient={(clientName) => navigate(`/client/${encodeURIComponent(clientName)}`)}
           />

@@ -1,7 +1,9 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { FIELDS, scoreColor, fmt, fmtPct } from "../utils/score";
+import { useDashboard } from "../context/DashboardContext";
 import CompareView from "./CompareView";
 import { getTooltipStyle } from "../utils/theme";
+import DateRangePicker from "./DateRangePicker";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell,
 } from "recharts";
@@ -82,17 +84,39 @@ function useColumnResize() {
   return { widths, onMouseDown };
 }
 
-export default function ProductDetail({ sku, rows: allRows, onClose, onSelectClient }) {
+export default function ProductDetail({ sku, rows: allRows, dates = [], onClose, onSelectClient }) {
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
   const [tab, setTab] = useState("rows");
+  const [evoFrom, setEvoFrom] = useState("");
+  const [evoTo, setEvoTo] = useState("");
+  const [allSkuRows, setAllSkuRows] = useState(null);
   const { widths, onMouseDown } = useColumnResize();
+  const { activeDatasetId } = useDashboard();
+
+  useEffect(() => { setAllSkuRows(null); }, [sku]);
+
+  useEffect(() => {
+    if (tab !== "evolution") return;
+    if (allSkuRows !== null) return;
+    const params = new URLSearchParams({ all_dates: "true" });
+    if (activeDatasetId != null) params.set("dataset_id", activeDatasetId);
+    fetch(`/data?${params}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const skuRows = (data.rows ?? []).filter((r) => r[FIELDS.SKU] === sku);
+        setAllSkuRows(skuRows);
+      })
+      .catch(() => setAllSkuRows([]));
+  }, [tab, sku, activeDatasetId, allSkuRows]);
 
   const rows = useMemo(
     () => allRows.filter((r) => r[FIELDS.SKU] === sku),
     [allRows, sku]
   );
+
+  const evoRows = allSkuRows ?? rows;
 
   const description = rows[0]?.[FIELDS.DESCRIPCION] ?? "";
   const allowedPct = rows[0]?.allowed_pct ?? null;
@@ -127,23 +151,41 @@ export default function ProductDetail({ sku, rows: allRows, onClose, onSelectCli
 
   const evolutionData = useMemo(() => {
     const byClient = {};
-    for (const r of rows) {
+    const filtered = evoRows.filter((r) => {
+      const f = String(r[FIELDS.FECHA] ?? "").slice(0, 10);
+      if (!f) return false;
+      if (evoFrom && f < evoFrom) return false;
+      if (evoTo && f > evoTo) return false;
+      return true;
+    });
+
+    for (const r of filtered) {
       const client = r[FIELDS.RAZON_SOCIAL] || "Sin nombre";
       const pct = parseFloat(r.normalized_pct ?? r[FIELDS.PCT_DIF]);
+      const fecha = r[FIELDS.FECHA];
       if (!isNaN(pct)) {
         if (!byClient[client]) byClient[client] = [];
-        byClient[client].push(pct);
+        byClient[client].push({ pct, fecha });
       }
     }
+
     return Object.entries(byClient)
-      .filter(([, arr]) => arr.length >= 2)
+      .filter(([, arr]) => (evoFrom || evoTo) ? arr.length >= 1 : arr.length >= 2)
       .map(([client, arr]) => {
-        const first = Math.round(arr[0] * 10) / 10;
-        const last = Math.round(arr[arr.length - 1] * 10) / 10;
-        const diff = Math.round((last - first) * 10) / 10;
-        return { client, first, last, diff };
+        const sorted = [...arr].sort((a, b) => a.fecha.localeCompare(b.fecha));
+        const firstEntry = sorted[0];
+        const lastEntry = sorted[sorted.length - 1];
+        const first = Math.round(firstEntry.pct);
+        const last = Math.round(lastEntry.pct);
+        const diff = last - first;
+        return { client, first, last, diff, firstDate: firstEntry.fecha, lastDate: lastEntry.fecha };
       })
       .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+  }, [evoRows, evoFrom, evoTo]);
+
+  const availableDates = useMemo(() => {
+    const dates = rows.map((r) => r[FIELDS.FECHA]).filter(Boolean);
+    return [...new Set(dates)].sort();
   }, [rows]);
 
   const avgScore = useMemo(() => {
@@ -304,9 +346,19 @@ export default function ProductDetail({ sku, rows: allRows, onClose, onSelectCli
 
       {tab === "evolution" && (
         <div style={{ padding: "16px" }}>
-          {evolutionData.length === 0 ? (
-            <p className="empty">No hay suficientes registros por cliente para mostrar evolución.</p>
-          ) : (
+          <div className="evo-header">
+            <h3>Evolución % PVP</h3>
+            {dates.length > 0 && (
+              <DateRangePicker
+                dates={dates}
+                from={evoFrom}
+                to={evoTo}
+                onFromChange={setEvoFrom}
+                onToChange={setEvoTo}
+              />
+            )}
+          </div>
+          {evolutionData.length > 0 ? (
             <table className="detail-table" style={{ tableLayout: "auto", width: "100%" }}>
               <thead>
                 <tr>
@@ -326,8 +378,14 @@ export default function ProductDetail({ sku, rows: allRows, onClose, onSelectCli
                     >
                       {e.client}
                     </td>
-                    <td>{e.first}%</td>
-                    <td>{e.last}%</td>
+                    <td>
+                      <span>{e.first}%</span>
+                      <span style={{ display: "block", fontSize: 10, color: "var(--text-muted)" }}>{e.firstDate}</span>
+                    </td>
+                    <td>
+                      <span>{e.last}%</span>
+                      <span style={{ display: "block", fontSize: 10, color: "var(--text-muted)" }}>{e.lastDate}</span>
+                    </td>
                     <td style={{ color: e.diff > 0 ? "#22c55e" : e.diff < 0 ? "#ef4444" : "inherit", fontWeight: "bold" }}>
                       {e.diff > 0 ? "+" : ""}{e.diff}%
                     </td>
@@ -335,6 +393,11 @@ export default function ProductDetail({ sku, rows: allRows, onClose, onSelectCli
                 ))}
               </tbody>
             </table>
+          ) : (
+            <div className="evo-empty">
+              <p>No hay datos para el rango seleccionado</p>
+              <span>Probá ampliando el rango de fechas</span>
+            </div>
           )}
         </div>
       )}

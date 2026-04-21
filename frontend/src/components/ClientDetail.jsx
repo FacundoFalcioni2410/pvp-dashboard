@@ -4,6 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
 } from "recharts";
 import { scoreColor, fmt, fmtPct, FIELDS } from "../utils/score";
+import DateRangePicker from "./DateRangePicker";
 import { getTooltipStyle } from "../utils/theme";
 
 const PAGE_SIZE = 50;
@@ -153,6 +154,8 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
   const [activeTab, setActiveTab] = useState("activity");
+  const [evoFrom, setEvoFrom] = useState("");
+  const [evoTo, setEvoTo] = useState("");
   const { widths, onMouseDown } = useColumnResize();
   const { rowHeight, onRowResizeMouseDown } = useRowHeight();
 
@@ -199,21 +202,46 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
     for (const r of rows) {
       const sku = r[FIELDS.SKU] || "Sin SKU";
       const pct = parseFloat(r.normalized_pct);
+      const fecha = r[FIELDS.FECHA];
       if (!isNaN(pct)) {
         if (!bySku[sku]) bySku[sku] = [];
-        bySku[sku].push({ pct, fecha: r[FIELDS.FECHA] });
+        bySku[sku].push({ pct, fecha });
       }
     }
     const result = [];
     for (const [sku, arr] of Object.entries(bySku)) {
       if (arr.length >= 2) {
-        const first = Math.round(arr[0].pct);
-        const last = Math.round(arr[arr.length - 1].pct);
-        const diff = last - first;
-        result.push({ sku, first, last, diff });
+        const sorted = [...arr].sort((a, b) => a.fecha.localeCompare(b.fecha));
+        let firstPct = null;
+        let lastPct = null;
+
+        if (evoFrom || evoTo) {
+          const fromIdx = evoFrom ? sorted.findIndex((r) => r.fecha >= evoFrom) : 0;
+          const toIdx = evoTo ? sorted.findLastIndex((r) => r.fecha <= evoTo) : sorted.length - 1;
+
+          if (fromIdx >= 0 && fromIdx < sorted.length) {
+            firstPct = sorted[fromIdx].pct;
+          }
+          if (toIdx >= 0 && toIdx >= fromIdx) {
+            lastPct = sorted[toIdx].pct;
+          }
+        } else {
+          firstPct = sorted[0].pct;
+          lastPct = sorted[sorted.length - 1].pct;
+        }
+
+        if (firstPct != null && lastPct != null) {
+          const diff = Math.round(lastPct) - Math.round(firstPct);
+          result.push({ sku, first: Math.round(firstPct), last: Math.round(lastPct), diff });
+        }
       }
     }
     return result.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+  }, [rows, evoFrom, evoTo]);
+
+  const availableDates = useMemo(() => {
+    const dates = rows.map((r) => r[FIELDS.FECHA]).filter(Boolean);
+    return [...new Set(dates)].sort();
   }, [rows]);
 
   const shownRows = useMemo(
@@ -283,37 +311,55 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
       </div>
       )}
 
-      {activeTab === "evolution" && priceEvolution.length > 0 && (
+      {activeTab === "evolution" && (
         <div className="detail-chart">
-          <h3>Evolución de % PVP (primer vs último registro por SKU)</h3>
-          <table className="detail-table" style={{ fontSize: 12 }}>
-            <thead>
-              <tr>
-                <th>SKU</th>
-                <th>Primero</th>
-                <th>Último</th>
-                <th>Diferencia</th>
-              </tr>
-            </thead>
-            <tbody>
-              {priceEvolution.slice(0, 15).map((e, i) => (
-                <tr key={i}>
-                  <td
-                    className="clickable-cell"
-                    onClick={() => onSelectProduct && onSelectProduct(e.sku)}
-                    title="Ver producto"
-                  >
-                    {e.sku}
-                  </td>
-                  <td>{e.first != null ? Math.round(e.first) : "—"}%</td>
-                  <td>{e.last != null ? Math.round(e.last) : "—"}%</td>
-                  <td style={{ color: e.diff > 0 ? "#22c55e" : e.diff < 0 ? "#ef4444" : "inherit", fontWeight: "bold" }}>
-                    {e.diff > 0 ? "+" : ""}{Math.round(e.diff)}%
-                  </td>
+          <div className="evo-header">
+            <h3>Evolución % PVP</h3>
+            {dates.length > 0 && (
+              <DateRangePicker
+                dates={dates}
+                from={evoFrom}
+                to={evoTo}
+                onFromChange={setEvoFrom}
+                onToChange={setEvoTo}
+              />
+            )}
+          </div>
+          {priceEvolution.length > 0 ? (
+            <table className="detail-table" style={{ fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Primero</th>
+                  <th>Último</th>
+                  <th>Diferencia</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {priceEvolution.slice(0, 15).map((e, i) => (
+                  <tr key={i}>
+                    <td
+                      className="clickable-cell"
+                      onClick={() => onSelectProduct && onSelectProduct(e.sku)}
+                      title="Ver producto"
+                    >
+                      {e.sku}
+                    </td>
+                    <td>{e.first != null ? Math.round(e.first) : "—"}%</td>
+                    <td>{e.last != null ? Math.round(e.last) : "—"}%</td>
+                    <td style={{ color: e.diff > 0 ? "#22c55e" : e.diff < 0 ? "#ef4444" : "inherit", fontWeight: "bold" }}>
+                      {e.diff > 0 ? "+" : ""}{Math.round(e.diff)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="evo-empty">
+              <p>No hay datos para el rango seleccionado</p>
+              <span>Probá ampliando el rango de fechas</span>
+            </div>
+          )}
         </div>
       )}
 
