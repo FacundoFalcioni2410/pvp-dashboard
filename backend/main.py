@@ -303,6 +303,18 @@ def _deduplicate_by_mla_day(rows: list[dict]) -> list[dict]:
     return list(best.values())
 
 
+def _deduplicate_by_mla(rows: list[dict]) -> list[dict]:
+    best: dict[tuple, dict] = {}
+    for row in rows:
+        razon = (row.get(RAZON_SOCIAL_COL) or "Sin nombre").strip()
+        mla = (row.get(MLA_COL) or "").strip()
+        key = (razon, mla)
+        abs_pct = abs(normalise_pct(row.get(PCT_DIF_COL)) or 0)
+        if key not in best or abs_pct > abs(normalise_pct(best[key].get(PCT_DIF_COL)) or 0):
+            best[key] = row
+    return list(best.values())
+
+
 def aggregate_clients(rows: list[dict]) -> list:
     client_map = defaultdict(lambda: {"scores": [], "usuario": ""})
     for row in rows:
@@ -423,7 +435,7 @@ def enrich_rows(rows: list[dict]) -> list[dict]:
     return rows
 
 
-def build_sku_deviation_chart(rows: list[dict], threshold: int = 15) -> list:
+def build_sku_deviation_chart(rows: list[dict], threshold: int = 10) -> list:
     import math
     deduped = _deduplicate_by_mla_day(rows)
     smap = defaultdict(lambda: {"count": 0, "total": 0, "pct_sum": 0, "descripcion": "", "rot": ""})
@@ -500,15 +512,107 @@ def build_rot_chart(rows: list[dict], threshold: int = 15) -> list:
     return results
 
 
-def build_response(rows: list[dict]) -> str:
+def build_deviation_chart(rows: list[dict], threshold: int = 10) -> list:
+    deduped = _deduplicate_by_mla(rows)
+    dmap = defaultdict(lambda: {"count": 0, "total": 0, "usuario": ""})
+    for row in deduped:
+        if (row.get(TIPO_CLIENTE_COL) or "").strip() == "CONTRABANDO":
+            continue
+        razon = (row.get(RAZON_SOCIAL_COL) or "Sin nombre").strip()
+        pct = normalise_pct(row.get(PCT_DIF_COL))
+        dmap[razon]["total"] += 1
+        dmap[razon]["usuario"] = (row.get(USUARIO_ML_COL) or "").strip()
+        if pct is not None and abs(pct) >= threshold:
+            dmap[razon]["count"] += 1
+    results = []
+    for name, d in dmap.items():
+        if d["total"] > 0:
+            results.append({
+                "name": name[:40] + "\u2026" if len(name) > 40 else name,
+                "fullName": name,
+                "count": d["count"],
+                "total": d["total"],
+                "pctDeviation": round(100 * d["count"] / d["total"]),
+                "usuario": d["usuario"],
+            })
+    results = [r for r in results if r["count"] > 0]
+    results.sort(key=lambda x: x["pctDeviation"], reverse=True)
+    return results[:20]
+
+
+def build_monthly_summary(rows: list[dict]) -> dict:
+    deduped = _deduplicate_by_mla_day(rows)
+    skus = set()
+    pct_sum = 0.0
+    pct_count = 0
+    for row in deduped:
+        if (row.get(TIPO_CLIENTE_COL) or "").strip() == "CONTRABANDO":
+            continue
+        sku = str(row.get(SKU_COL) or row.get(MLA_COL) or "").strip()
+        if sku:
+            skus.add(sku)
+        pct = normalise_pct(row.get(PCT_DIF_COL))
+        if pct is not None:
+            pct_sum += abs(pct)
+            pct_count += 1
+    return {
+        "skuCount": len(skus),
+        "avgDeviation": round(pct_sum / pct_count, 1) if pct_count > 0 else 0,
+        "totalPubs": len(deduped),
+    }
+
+
+def build_monthly_deviation_chart(rows: list[dict], threshold: int = 10) -> list:
+    deduped = _deduplicate_by_mla_day(rows)
+    mmap = defaultdict(lambda: defaultdict(lambda: {"count": 0, "total": 0, "pct_sum": 0.0}))
+    for row in deduped:
+        if (row.get(TIPO_CLIENTE_COL) or "").strip() == "CONTRABANDO":
+            continue
+        razon = (row.get(RAZON_SOCIAL_COL) or "Sin nombre").strip()
+        fecha = str(row.get(FECHA_COL) or "")[:7]
+        if not fecha or len(fecha) < 7:
+            continue
+        pct = normalise_pct(row.get(PCT_DIF_COL))
+        m = fecha
+        mmap[m][razon]["total"] += 1
+        if pct is not None:
+            mmap[m][razon]["pct_sum"] += abs(pct)
+            if abs(pct) >= threshold:
+                mmap[m][razon]["count"] += 1
+    results = []
+    for month in sorted(mmap.keys()):
+        month_total = 0
+        month_count = 0
+        month_pct_sum = 0.0
+        month_pct_count = 0
+        for razon, d in mmap[month].items():
+            month_total += d["total"]
+            month_count += d["count"]
+            month_pct_sum += d["pct_sum"]
+            month_pct_count += d["total"]
+        if month_total > 0:
+            results.append({
+                "month": month,
+                "count": month_count,
+                "total": month_total,
+                "pctDeviation": round(100 * month_count / month_total),
+                "avgDeviation": round(month_pct_sum / month_pct_count, 1) if month_pct_count > 0 else 0,
+            })
+    return results
+
+
+def build_response(rows: list[dict], all_rows: list[dict] | None = None) -> str:
     rows = enrich_rows(rows)
+    chart_rows = enrich_rows(all_rows) if all_rows is not None else rows
     body = {
         "rows": rows,
         "total": len(rows),
         "clients": aggregate_clients(rows),
         "scatter": build_scatter_data(rows),
-        "infractionChart": build_infraction_chart(rows),
-        "highDeviationChart": build_high_deviation_chart(rows),
+        "deviationChart": build_deviation_chart(rows),
+        "allDatesDeviationChart": build_deviation_chart(chart_rows),
+        "monthlyDeviationChart": build_monthly_deviation_chart(chart_rows),
+        "monthlySummary": build_monthly_summary(chart_rows),
         "skuDeviationChart": build_sku_deviation_chart(rows),
         "rotChart": build_rot_chart(rows),
         "thresholdCount": get_threshold_count(),
@@ -617,7 +721,8 @@ def init():
     if not dates:
         return Response(status_code=204)
     rows = query_dataset_rows(dataset_id, dates[0])
-    body = json.loads(build_response(rows))
+    all_rows = query_dataset_rows(dataset_id, None)
+    body = json.loads(build_response(rows, all_rows))
     body["dates"] = dates
     body["selectedDate"] = dates[0]
     body["datasets"] = datasets
@@ -725,8 +830,9 @@ async def upload_excel(file: UploadFile = File(...)):
     dates = query_dataset_dates(dataset_id)
     latest_date = dates[0] if dates else None
     rows = query_dataset_rows(dataset_id, latest_date)
+    all_rows = query_dataset_rows(dataset_id, None)
 
-    body = json.loads(build_response(rows))
+    body = json.loads(build_response(rows, all_rows))
     body["dates"] = dates
     body["selectedDate"] = latest_date
     body["datasets"] = datasets
@@ -750,7 +856,9 @@ def get_data(date: str = Query(default=None), dataset_id: int = Query(default=No
     resolved_date = None if all_dates else (date or (dates[0] if dates else None))
     rows = query_dataset_rows(dataset_id, resolved_date)
 
-    body = json.loads(build_response(rows))
+    all_rows = rows if all_dates or resolved_date is None else query_dataset_rows(dataset_id, None)
+
+    body = json.loads(build_response(rows, all_rows))
     body["dates"] = dates
     body["selectedDate"] = resolved_date
     body["activeDatasetId"] = dataset_id

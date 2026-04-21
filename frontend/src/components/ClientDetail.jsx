@@ -395,8 +395,7 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
         <div className="detail-deviation-filters">
           <span className="deviation-filter-label">Desvío:</span>
           <button className={`deviation-btn ${pctThreshold === null ? "active" : ""}`} onClick={() => onSetFilter(null)}>Todos</button>
-          <button className={`deviation-btn deviation-btn-orange ${pctThreshold === 15 ? "active" : ""}`} onClick={() => onSetFilter(15)}>≥ 15%</button>
-          <button className={`deviation-btn deviation-btn-red ${pctThreshold === 40 ? "active" : ""}`} onClick={() => onSetFilter(40)}>≥ 40%</button>
+          <button className={`deviation-btn deviation-btn-orange ${pctThreshold === 10 ? "active" : ""}`} onClick={() => onSetFilter(10)}>≥ 10%</button>
         </div>
         <div className="sort-indicator">
           {sortCol && (

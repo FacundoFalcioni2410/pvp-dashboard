@@ -25,55 +25,26 @@ function CollapsibleChart({ title, children, defaultOpen = true }) {
   );
 }
 
-const SummaryStats = memo(function SummaryStats({ rows }) {
-  const stats = useMemo(() => {
-    const total = rows.length;
-    if (total === 0) return null;
+const SummaryStats = memo(function SummaryStats({ monthlySummary }) {
+  const stats = monthlySummary;
 
-    const scores = rows.map((r) => r.score).filter((s) => s != null && s > 0);
-    const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-
-    const infractions = rows.filter((r) => {
-      const pct = Math.abs(parseFloat(r.normalized_pct) || 0);
-      return pct > 15;
-    }).length;
-
-    const highDev = rows.filter((r) => {
-      const pct = Math.abs(parseFloat(r.normalized_pct) || 0);
-      return pct > 40;
-    }).length;
-
-    return {
-      total,
-      avgScore,
-      infractions: Math.round((infractions / total) * 100),
-      highDev: Math.round((highDev / total) * 100),
-    };
-  }, [rows]);
-
-  if (!stats) return null;
+  if (!stats || !stats.skuCount) return null;
 
   return (
     <div className="summary-stats">
       <div className="stat-box">
-        <span className="stat-value">{stats.total}</span>
-        <span className="stat-label">Publicaciones</span>
+        <span className="stat-value">{stats.skuCount?.toLocaleString()}</span>
+        <span className="stat-label">SKUs</span>
       </div>
       <div className="stat-box">
-        <span className="stat-value" style={{ color: scoreColor(stats.avgScore) }}>{stats.avgScore}</span>
-        <span className="stat-label">Score Promedio</span>
-      </div>
-      <div className="stat-box">
-        <span className="stat-value" style={{ color: stats.infractions > 30 ? "#ef4444" : stats.infractions > 15 ? "#f97316" : "#eab308" }}>
-          {stats.infractions}%
+        <span className="stat-value" style={{ color: stats.avgDeviation > 20 ? "#ef4444" : stats.avgDeviation > 10 ? "#f97316" : "#eab308" }}>
+          {stats.avgDeviation}%
         </span>
-        <span className="stat-label">En Infracción (&gt;15%)</span>
+        <span className="stat-label">Desvío Promedio (mes)</span>
       </div>
       <div className="stat-box">
-        <span className="stat-value" style={{ color: stats.highDev > 10 ? "#ef4444" : stats.highDev > 5 ? "#f97316" : "#eab308" }}>
-          {stats.highDev}%
-        </span>
-        <span className="stat-label">Alto Desvío (&gt;40%)</span>
+        <span className="stat-value">{stats.totalPubs?.toLocaleString()}</span>
+        <span className="stat-label">Publicaciones (mes)</span>
       </div>
     </div>
   );
@@ -161,7 +132,7 @@ const InfractionPanel = memo(function InfractionPanel({ data, onSelect }) {
             return (
               <div style={getTooltipStyle().contentStyle}>
                 <p style={{ marginBottom: 4, fontWeight: 600 }}>{d.fullName || label}</p>
-                <p>% Infracción: {d.pctInfraccion}%</p>
+                <p>% Infracción (≥10%): {d.pctInfraccion}%</p>
                 <p>Publicaciones en infracción: {d.count} / {d.total}</p>
               </div>
             );
@@ -179,48 +150,26 @@ const InfractionPanel = memo(function InfractionPanel({ data, onSelect }) {
   );
 });
 
-const HighDeviationPanel = memo(function HighDeviationPanel({ data, onSelect }) {
-  const sorted = useMemo(() =>
-    [...data].sort((a, b) => b.count - a.count),
-    [data]
-  );
-  const maxCount = useMemo(() => Math.max(...data.map((d) => d.count), 1), [data]);
-  const h = Math.max(sorted.length * 32 + 20, 120);
+const DeviationPanel = memo(function DeviationPanel({ data, allDatesData, onSelect }) {
+  const [view, setView] = useState("day");
+
+  const currentData = view === "day" ? data : allDatesData;
+
   return (
-    <ResponsiveContainer width="100%" height={h}>
-      <BarChart data={sorted} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
-        <XAxis
-          type="number"
-          domain={[0, maxCount]}
-          tick={{ fontSize: 11 }}
-        />
-        <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 10 }} />
-        <Tooltip
-          {...getTooltipStyle()}
-          content={({ payload, label }) => {
-            if (!payload?.length) return null;
-            const d = payload[0].payload;
-            return (
-              <div style={getTooltipStyle().contentStyle}>
-                <p style={{ marginBottom: 4, fontWeight: 600 }}>{d.fullName || label}</p>
-                <p>% Desvío Alto: {d.pctHighDeviation}%</p>
-                <p>Desvíos altos: {d.count} / {d.total}</p>
-              </div>
-            );
-          }}
-        />
-        <Bar dataKey="count" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelect?.(d, 40)} cursor="pointer">
-          {sorted.map((entry, i) => (
-            <Cell key={i} fill={entry.pctHighDeviation >= 30 ? "#ef4444" : entry.pctHighDeviation >= 15 ? "#f97316" : "#eab308"} />
-          ))}
-          <LabelList dataKey="count" position="insideRight"
-            style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }} />
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+    <>
+      <div className="chart-sort-btns">
+        <button className={`chart-sort-btn ${view === "day" ? "active" : ""}`} onClick={() => setView("day")}>Por día</button>
+        <button className={`chart-sort-btn ${view === "month" ? "active" : ""}`} onClick={() => setView("month")}>Por mes</button>
+      </div>
+      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "4px 0 0" }}>
+        {view === "day" ? "Mostrando datos del día seleccionado" : "Mostrando datos de todas las fechas del dataset"}
+      </p>
+      <InfractionPanel data={currentData} onSelect={onSelect} />
+    </>
   );
 });
+
+
 
 const RotChart = memo(function RotChart({ data }) {
   const [metric, setMetric] = useState("avgScore");
@@ -345,7 +294,7 @@ const SkuDeviationPanel = memo(function SkuDeviationPanel({ data, onSelectSku })
   );
 });
 
-export default function Charts({ clients, rows, infractionChart, highDeviationChart, skuDeviationChart, rotChart, onSelect, onSelectSku }) {
+export default function Charts({ clients, rows, infractionChart, allDatesInfractionChart, monthlySummary, skuDeviationChart, rotChart, onSelect, onSelectSku }) {
   const [page, setPage] = useState(0);
 
   const allClients = useMemo(() =>
@@ -387,24 +336,18 @@ export default function Charts({ clients, rows, infractionChart, highDeviationCh
         <BarPanel clientData={clientData} onSelect={handleSelect} />
       </CollapsibleChart>
 
-      <CollapsibleChart title="Resumen del día" defaultOpen={true}>
-        <SummaryStats rows={rows} />
+      <CollapsibleChart title="Resumen del mes" defaultOpen={true}>
+        <SummaryStats monthlySummary={monthlySummary} />
       </CollapsibleChart>
 
       {infractionChart && infractionChart.length > 0 && (
-        <CollapsibleChart title="Cuentas con más publicaciones en infracción (>15%)" defaultOpen={true}>
-          <InfractionPanel data={infractionChart} onSelect={handleSelect} />
-        </CollapsibleChart>
-      )}
-
-      {highDeviationChart && highDeviationChart.length > 0 && (
-        <CollapsibleChart title="Cuentas con mayores desvíos altos (>40%)" defaultOpen={true}>
-          <HighDeviationPanel data={highDeviationChart} onSelect={handleSelect} />
+        <CollapsibleChart title="Cuentas en infracción (≥10%)" defaultOpen={true}>
+          <DeviationPanel data={infractionChart} allDatesData={allDatesInfractionChart} onSelect={handleSelect} />
         </CollapsibleChart>
       )}
 
       {skuDeviationChart && skuDeviationChart.length > 0 && (
-        <CollapsibleChart title="SKUs con más desvíos (>15%)" defaultOpen={true}>
+        <CollapsibleChart title="SKUs con más desvíos (≥10%)" defaultOpen={true}>
           <SkuDeviationPanel data={skuDeviationChart} onSelectSku={onSelectSku} />
         </CollapsibleChart>
       )}
