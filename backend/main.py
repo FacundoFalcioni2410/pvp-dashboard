@@ -385,8 +385,8 @@ def build_infraction_chart(rows: list[dict], threshold: int = 15) -> list:
                 "pctInfraccion": round(100 * d["count"] / d["total"]),
                 "usuario": d["usuario"],
             })
-    results.sort(key=lambda x: x["pctInfraccion"], reverse=True)
-    return results[:20]
+    results.sort(key=lambda x: x["count"], reverse=True)
+    return results[:50]
 
 
 def build_high_deviation_chart(rows: list[dict], threshold: int = 40) -> list:
@@ -413,8 +413,8 @@ def build_high_deviation_chart(rows: list[dict], threshold: int = 40) -> list:
                 "usuario": d["usuario"],
             })
     results = [r for r in results if r["count"] > 0]
-    results.sort(key=lambda x: x["pctHighDeviation"], reverse=True)
-    return results[:20]
+    results.sort(key=lambda x: x["count"], reverse=True)
+    return results[:50]
 
 
 SKU_COL = "SKU"
@@ -513,7 +513,7 @@ def build_rot_chart(rows: list[dict], threshold: int = 15) -> list:
 
 
 def build_deviation_chart(rows: list[dict], threshold: int = 10) -> list:
-    deduped = _deduplicate_by_mla(rows)
+    deduped = _deduplicate_by_mla_day(rows)
     dmap = defaultdict(lambda: {"count": 0, "total": 0, "usuario": ""})
     for row in deduped:
         if (row.get(TIPO_CLIENTE_COL) or "").strip() == "CONTRABANDO":
@@ -536,8 +536,8 @@ def build_deviation_chart(rows: list[dict], threshold: int = 10) -> list:
                 "usuario": d["usuario"],
             })
     results = [r for r in results if r["count"] > 0]
-    results.sort(key=lambda x: x["pctDeviation"], reverse=True)
-    return results[:20]
+    results.sort(key=lambda x: x["count"], reverse=True)
+    return results[:50]
 
 
 def build_monthly_summary(rows: list[dict]) -> dict:
