@@ -12,21 +12,30 @@ export function DashboardProvider({ children }) {
   const [compareDatasetId, setCompareDatasetId] = useState(null);
 
   useEffect(() => {
-    fetch("/init")
-      .then((res) => {
-        if (res.status === 204) return null;
-        return res.json();
-      })
-      .then((data) => {
+    let cancelled = false;
+    const attempt = async (retriesLeft) => {
+      try {
+        const res = await fetch("/init");
+        if (cancelled) return;
+        const data = res.status === 204 ? null : await res.json();
         if (data) {
           setDatasets(data.datasets ?? []);
           setActiveDatasetId(data.activeDatasetId ?? null);
           setThresholdCount(data.thresholdCount ?? 0);
           setDashboardDataState(data);
         }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+        setLoading(false);
+      } catch {
+        if (cancelled) return;
+        if (retriesLeft > 0) {
+          setTimeout(() => attempt(retriesLeft - 1), 1500);
+        } else {
+          setLoading(false);
+        }
+      }
+    };
+    attempt(5);
+    return () => { cancelled = true; };
   }, []);
 
   const setDashboardData = useCallback((data) => {
