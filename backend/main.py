@@ -512,7 +512,7 @@ def build_rot_chart(rows: list[dict], threshold: int = 15) -> list:
     return results
 
 
-def build_deviation_chart(rows: list[dict], threshold: int = 10) -> list:
+def build_deviation_chart(rows: list[dict], threshold: int = 15) -> list:
     deduped = _deduplicate_by_mla_day(rows)
     dmap = defaultdict(lambda: {"count": 0, "total": 0, "usuario": ""})
     for row in deduped:
@@ -562,7 +562,7 @@ def build_monthly_summary(rows: list[dict]) -> dict:
     }
 
 
-def build_monthly_deviation_chart(rows: list[dict], threshold: int = 10) -> list:
+def build_monthly_deviation_chart(rows: list[dict], threshold: int = 15) -> list:
     deduped = _deduplicate_by_mla_day(rows)
     mmap = defaultdict(lambda: defaultdict(lambda: {"count": 0, "total": 0, "pct_sum": 0.0}))
     for row in deduped:

@@ -132,7 +132,7 @@ const InfractionPanel = memo(function InfractionPanel({ data, onSelect }) {
             return (
               <div style={getTooltipStyle().contentStyle}>
                 <p style={{ marginBottom: 4, fontWeight: 600 }}>{d.fullName || label}</p>
-                <p>% Infracción (≥10%): {d.pctInfraccion}%</p>
+                <p>% Infracción (≥15%): {d.pctInfraccion}%</p>
                 <p>Publicaciones en infracción: {d.count} / {d.total}</p>
               </div>
             );
@@ -294,7 +294,7 @@ const SkuDeviationPanel = memo(function SkuDeviationPanel({ data, onSelectSku })
   );
 });
 
-export default function Charts({ clients, rows, infractionChart, allDatesInfractionChart, monthlySummary, skuDeviationChart, rotChart, onSelect, onSelectSku }) {
+export default function Charts({ clients, infractionChart, allDatesInfractionChart, monthlySummary, skuDeviationChart, rotChart, onSelect, onSelectSku }) {
   const [page, setPage] = useState(0);
 
   const allClients = useMemo(() =>
@@ -341,7 +341,7 @@ export default function Charts({ clients, rows, infractionChart, allDatesInfract
       </CollapsibleChart>
 
       {infractionChart && infractionChart.length > 0 && (
-        <CollapsibleChart title="Cuentas en infracción (≥10%)" defaultOpen={true}>
+        <CollapsibleChart title="Cuentas en infracción (≥15%)" defaultOpen={true}>
           <DeviationPanel data={infractionChart} allDatesData={allDatesInfractionChart} onSelect={handleSelect} />
         </CollapsibleChart>
       )}

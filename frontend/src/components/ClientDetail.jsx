@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import CompareView from "./CompareView";
 import {
@@ -150,7 +151,7 @@ function useRowHeight() {
   return { rowHeight, onRowResizeMouseDown: onMouseDown };
 }
 
-export default function ClientDetail({ client, onClose, pctThreshold = null, onSetFilter, dates = [], selectedDate, onDateChange, onSelectProduct }) {
+export default function ClientDetail({ client, onClose, pctThreshold = null, onSetFilter, dates = [], onSelectProduct }) {
   const [visibleRows, setVisibleRows] = useState(PAGE_SIZE);
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
@@ -251,11 +252,6 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
       })
       .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
   }, [evoRows, evoFrom, evoTo]);
-
-  const availableDates = useMemo(() => {
-    const d = evoRows.map((r) => r[FIELDS.FECHA]).filter(Boolean).map((f) => String(f).slice(0, 10));
-    return [...new Set(d)].sort();
-  }, [evoRows]);
 
   const shownRows = useMemo(
     () => sortedRows.slice(0, visibleRows),
