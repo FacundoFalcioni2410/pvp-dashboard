@@ -446,6 +446,13 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
           </thead>
 
           <tbody>
+            {shownRows.length === 0 && (
+              <tr>
+                <td colSpan={COLUMNS.length} style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
+                  No hay datos para el día seleccionado
+                </td>
+              </tr>
+            )}
             {shownRows.map((r, i) => (
               <tr key={i} style={{ height: rowHeight }}>
                 <td>{fmt(r[FIELDS.FECHA])}</td>

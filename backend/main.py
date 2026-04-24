@@ -343,6 +343,35 @@ def aggregate_clients(rows: list[dict]) -> list:
     return result
 
 
+def build_sku_score_chart(rows: list[dict]) -> list:
+    sku_map = defaultdict(lambda: {"scores": [], "descripcion": ""})
+    for row in rows:
+        if (row.get(TIPO_CLIENTE_COL) or "").strip() == "CONTRABANDO":
+            continue
+        sku = (row.get(SKU_COL) or row.get(MLA_COL) or "Sin SKU").strip()
+        score = row.get("score")
+        try:
+            score = int(score)
+        except (TypeError, ValueError):
+            score = 0
+        if score > 0:
+            sku_map[sku]["scores"].append(score)
+            if not sku_map[sku]["descripcion"]:
+                sku_map[sku]["descripcion"] = (row.get("DESCRIPCION") or "").strip()
+    result = []
+    for sku, data in sku_map.items():
+        scores = data["scores"]
+        if scores:
+            result.append({
+                "sku": sku,
+                "name": sku,
+                "descripcion": data["descripcion"],
+                "avgScore": round(sum(scores) / len(scores)),
+            })
+    result.sort(key=lambda x: x["avgScore"])
+    return result[:50]
+
+
 def build_scatter_data(rows: list[dict], max_points: int = 500) -> list:
     scatter = []
     for row in rows:
@@ -608,11 +637,14 @@ def build_response(rows: list[dict], all_rows: list[dict] | None = None) -> str:
         "rows": rows,
         "total": len(rows),
         "clients": aggregate_clients(rows),
+        "allDatesClients": aggregate_clients(chart_rows),
         "scatter": build_scatter_data(rows),
         "deviationChart": build_deviation_chart(rows),
         "allDatesDeviationChart": build_deviation_chart(chart_rows),
         "monthlyDeviationChart": build_monthly_deviation_chart(chart_rows),
         "monthlySummary": build_monthly_summary(chart_rows),
+        "skuScoreChart": build_sku_score_chart(rows),
+        "allDatesSkuScoreChart": build_sku_score_chart(chart_rows),
         "skuDeviationChart": build_sku_deviation_chart(rows),
         "rotChart": build_rot_chart(rows),
         "thresholdCount": get_threshold_count(),

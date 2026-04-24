@@ -306,6 +306,13 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
                 </tr>
               </thead>
               <tbody>
+                {shownRows.length === 0 && (
+                  <tr>
+                    <td colSpan={COLUMNS.length} style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
+                      No hay datos para el día seleccionado
+                    </td>
+                  </tr>
+                )}
                 {shownRows.map((r, i) => (
                   <tr key={i}>
                     <td>{fmt(r[FIELDS.FECHA])}</td>

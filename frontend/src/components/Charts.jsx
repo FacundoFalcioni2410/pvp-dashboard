@@ -85,25 +85,59 @@ const StackedBarChart = memo(function StackedBarChart({ rows }) {
   );
 });
 
-const BarPanel = memo(function BarPanel({ clientData, onSelect }) {
+const BarPanel = memo(function BarPanel({ data, allDatesData, onSelect }) {
+  const [view, setView] = useState("day");
+  const [page, setPage] = useState(0);
+
+  const raw = view === "day" ? data : allDatesData;
+  const allSorted = useMemo(() =>
+    [...raw].map((c) => ({
+      ...c,
+      displayName: c.name.length > 18 ? c.name.slice(0, 16) + "…" : c.name,
+      fullName: c.name,
+    })).sort((a, b) => a.avgScore - b.avgScore),
+    [raw]
+  );
+  const totalPages = Math.ceil(allSorted.length / CHART_PAGE);
+  const pageData = useMemo(
+    () => allSorted.slice(page * CHART_PAGE, (page + 1) * CHART_PAGE),
+    [allSorted, page]
+  );
+
   return (
-    <ResponsiveContainer width="100%" height={CHART_H}>
-      <BarChart data={clientData} layout="vertical" margin={{ top: 4, right: 36, left: 4, bottom: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
-        <XAxis type="number" domain={[0, 10]} tick={{ fontSize: 11 }} />
-        <YAxis type="category" dataKey="displayName" width={140} tick={{ fontSize: 11 }} />
-        <Tooltip
-          {...getTooltipStyle()}
-          formatter={(v, name, payload) => [`Score: ${v}`, payload[0]?.payload?.fullName || payload[0]?.payload?.name || ""]}
-        />
-        <Bar dataKey="avgScore" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(data) => onSelect?.(data)}>
-          {clientData.map((entry, i) => (
-            <Cell key={i} fill={scoreColor(entry.avgScore)} />
-          ))}
-          <LabelList dataKey="avgScore" position="insideRight" style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }} />
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+    <>
+      <div className="chart-sort-btns">
+        <button className={`chart-sort-btn ${view === "day" ? "active" : ""}`} onClick={() => { setView("day"); setPage(0); }}>Por día</button>
+        <button className={`chart-sort-btn ${view === "month" ? "active" : ""}`} onClick={() => { setView("month"); setPage(0); }}>Por mes</button>
+      </div>
+      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "4px 0 0" }}>
+        {view === "day" ? "Mostrando datos del día seleccionado" : "Mostrando datos de todas las fechas del dataset"}
+      </p>
+      {totalPages > 1 && (
+        <div className="chart-pager">
+          <button className="pager-btn" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>‹</button>
+          <span>{page + 1} / {totalPages}</span>
+          <button className="pager-btn" disabled={page === totalPages - 1} onClick={() => setPage((p) => p + 1)}>›</button>
+        </div>
+      )}
+      <ResponsiveContainer width="100%" height={CHART_H}>
+        <BarChart data={pageData} layout="vertical" margin={{ top: 4, right: 36, left: 4, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
+          <XAxis type="number" domain={[0, 10]} tick={{ fontSize: 11 }} />
+          <YAxis type="category" dataKey="displayName" width={140} tick={{ fontSize: 11 }} />
+          <Tooltip
+            {...getTooltipStyle()}
+            formatter={(v, name, payload) => [`Score: ${v}`, payload[0]?.payload?.fullName || payload[0]?.payload?.name || ""]}
+          />
+          <Bar dataKey="avgScore" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelect?.(d)}>
+            {pageData.map((entry, i) => (
+              <Cell key={i} fill={scoreColor(entry.avgScore)} />
+            ))}
+            <LabelList dataKey="avgScore" position="insideRight" style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }} />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </>
   );
 });
 
@@ -294,51 +328,97 @@ const SkuDeviationPanel = memo(function SkuDeviationPanel({ data, onSelectSku })
   );
 });
 
-export default function Charts({ clients, infractionChart, allDatesInfractionChart, monthlySummary, skuDeviationChart, rotChart, onSelect, onSelectSku }) {
+const SkuScorePanel = memo(function SkuScorePanel({ data, allDatesData, onSelectSku }) {
+  const [view, setView] = useState("day");
   const [page, setPage] = useState(0);
 
-  const allClients = useMemo(() =>
-    [...clients]
-      .map((c) => ({
-        ...c,
-        displayName: c.name.length > 18 ? c.name.slice(0, 16) + "…" : c.name,
-        fullName: c.name,
-      }))
-      .sort((a, b) => a.avgScore - b.avgScore),
-    [clients]
+  const raw = view === "day" ? data : allDatesData;
+  const allSorted = useMemo(() =>
+    [...raw].map((d) => ({
+      ...d,
+      displayName: d.name.length > 18 ? d.name.slice(0, 16) + "…" : d.name,
+    })),
+    [raw]
+  );
+  const totalPages = Math.ceil(allSorted.length / CHART_PAGE);
+  const pageData = useMemo(
+    () => allSorted.slice(page * CHART_PAGE, (page + 1) * CHART_PAGE),
+    [allSorted, page]
   );
 
-  const totalPages = Math.ceil(allClients.length / CHART_PAGE);
-  const clientData = useMemo(
-    () => allClients.slice(page * CHART_PAGE, (page + 1) * CHART_PAGE),
-    [allClients, page]
+  return (
+    <>
+      <div className="chart-sort-btns">
+        <button className={`chart-sort-btn ${view === "day" ? "active" : ""}`} onClick={() => { setView("day"); setPage(0); }}>Por día</button>
+        <button className={`chart-sort-btn ${view === "month" ? "active" : ""}`} onClick={() => { setView("month"); setPage(0); }}>Por mes</button>
+      </div>
+      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "4px 0 0" }}>
+        {view === "day" ? "Mostrando datos del día seleccionado" : "Mostrando datos de todas las fechas del dataset"}
+      </p>
+      {totalPages > 1 && (
+        <div className="chart-pager">
+          <button className="pager-btn" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>‹</button>
+          <span>{page + 1} / {totalPages}</span>
+          <button className="pager-btn" disabled={page === totalPages - 1} onClick={() => setPage((p) => p + 1)}>›</button>
+        </div>
+      )}
+      <ResponsiveContainer width="100%" height={CHART_H}>
+        <BarChart data={pageData} layout="vertical" margin={{ top: 4, right: 36, left: 4, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
+          <XAxis type="number" domain={[0, 10]} tick={{ fontSize: 11 }} />
+          <YAxis type="category" dataKey="displayName" width={140} tick={{ fontSize: 11 }} />
+          <Tooltip
+            {...getTooltipStyle()}
+            content={({ payload }) => {
+              if (!payload?.length) return null;
+              const d = payload[0].payload;
+              return (
+                <div style={getTooltipStyle().contentStyle}>
+                  <p style={{ marginBottom: 4, fontWeight: 600 }}>{d.name}</p>
+                  {d.descripcion && <p style={{ color: "#aaa", fontSize: 11, marginBottom: 4 }}>{d.descripcion}</p>}
+                  <p>Score promedio: {d.avgScore}</p>
+                </div>
+              );
+            }}
+          />
+          <Bar dataKey="avgScore" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelectSku?.(d.sku || d.name)} cursor="pointer">
+            {pageData.map((entry, i) => (
+              <Cell key={i} fill={scoreColor(entry.avgScore)} />
+            ))}
+            <LabelList dataKey="avgScore" position="insideRight" style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }} />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </>
   );
+});
 
+export default function Charts({ clients, allDatesClients, infractionChart, allDatesInfractionChart, monthlySummary, skuScoreChart, allDatesSkuScoreChart, skuDeviationChart, rotChart, onSelect, onSelectSku }) {
   function handleSelect(data, pctThreshold = null) {
     if (!data || !onSelect) return;
     const name = data.fullName || data.displayName || data.name;
-    const client = clients.find((c) => c.name === name || name.includes(c.name) || c.name.includes(name));
-    if (client) onSelect(client, pctThreshold);
+    const all = [...clients, ...(allDatesClients || [])];
+    const client = all.find((c) => c.name === name || name.includes(c.name) || c.name.includes(name)) ?? { name };
+    onSelect(client, pctThreshold);
   }
 
   if (!clients || clients.length === 0) return null;
 
   return (
     <div className="charts">
-      <CollapsibleChart title="Score promedio por cliente" defaultOpen={true}>
-        {totalPages > 1 && (
-          <div className="chart-pager">
-            <button className="pager-btn" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>‹</button>
-            <span>{page + 1} / {totalPages}</span>
-            <button className="pager-btn" disabled={page === totalPages - 1} onClick={() => setPage((p) => p + 1)}>›</button>
-          </div>
-        )}
-        <BarPanel clientData={clientData} onSelect={handleSelect} />
-      </CollapsibleChart>
-
       <CollapsibleChart title="Resumen del mes" defaultOpen={true}>
         <SummaryStats monthlySummary={monthlySummary} />
       </CollapsibleChart>
+
+      <CollapsibleChart title="Score promedio por cliente" defaultOpen={true}>
+        <BarPanel data={clients} allDatesData={allDatesClients ?? []} onSelect={handleSelect} />
+      </CollapsibleChart>
+
+      {(skuScoreChart?.length > 0 || allDatesSkuScoreChart?.length > 0) && (
+        <CollapsibleChart title="Score promedio por SKU" defaultOpen={true}>
+          <SkuScorePanel data={skuScoreChart ?? []} allDatesData={allDatesSkuScoreChart ?? []} onSelectSku={onSelectSku} />
+        </CollapsibleChart>
+      )}
 
       {infractionChart && infractionChart.length > 0 && (
         <CollapsibleChart title="Cuentas en infracción (≥15%)" defaultOpen={true}>

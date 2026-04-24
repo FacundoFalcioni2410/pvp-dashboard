@@ -65,11 +65,14 @@ function Dashboard() {
   const selectedDate = dashboardData?.selectedDate ?? null;
   const rows = dashboardData?.rows ?? [];
   const clients = dashboardData?.clients ?? [];
+  const allDatesClients = dashboardData?.allDatesClients ?? [];
   const scatter = dashboardData?.scatter ?? [];
   const infractionChart = dashboardData?.deviationChart ?? [];
   const allDatesInfractionChart = dashboardData?.allDatesDeviationChart ?? [];
   const monthlyDeviationChart = dashboardData?.monthlyDeviationChart ?? [];
   const monthlySummary = dashboardData?.monthlySummary ?? {};
+  const skuScoreChart = dashboardData?.skuScoreChart ?? [];
+  const allDatesSkuScoreChart = dashboardData?.allDatesSkuScoreChart ?? [];
   const skuDeviationChart = dashboardData?.skuDeviationChart ?? [];
   const rotChart = dashboardData?.rotChart ?? [];
 
@@ -187,11 +190,14 @@ function Dashboard() {
             <div className="charts-wrap">
 <Charts
                 clients={clients}
+                allDatesClients={allDatesClients}
                 rows={rows}
                 scatter={scatter}
                 infractionChart={infractionChart}
                 allDatesInfractionChart={allDatesInfractionChart}
                 monthlySummary={monthlySummary}
+                skuScoreChart={skuScoreChart}
+                allDatesSkuScoreChart={allDatesSkuScoreChart}
                 skuDeviationChart={skuDeviationChart}
                 rotChart={rotChart}
                 onSelect={handleSelectClient}
