@@ -59,6 +59,13 @@ export default defineConfig({
         timeout: 60000,
         onError: silentError,
       },
+      '/score-config': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        proxyTimeout: 10000,
+        timeout: 10000,
+        onError: silentError,
+      },
     },
   },
 })

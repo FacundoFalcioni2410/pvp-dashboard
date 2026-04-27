@@ -7,6 +7,7 @@ import ProductList from "./components/ProductList";
 import ProductDetail from "./components/ProductDetail";
 import Charts from "./components/Charts";
 import ScoreLegend from "./components/ScoreLegend";
+import ScoreConfigPanel from "./components/ScoreConfigPanel";
 import DateDropdown from "./components/DateDropdown";
 import DatasetList from "./components/DatasetList";
 import ThresholdUpload from "./components/ThresholdUpload";
@@ -215,6 +216,7 @@ function Dashboard() {
 export default function App() {
   const navigate = useNavigate();
   const { theme, toggle: toggleTheme } = useTheme();
+  const [showScoreConfig, setShowScoreConfig] = useState(false);
   const { dashboardData, setDashboardData, loading, loadingData, thresholdCount, setThresholdCount, datasets } = useDashboard();
 
   const rows = dashboardData?.rows ?? [];
@@ -243,11 +245,16 @@ export default function App() {
         </button>
         <FileUpload onData={setDashboardData} />
         <ThresholdUpload thresholdCount={thresholdCount} onUploaded={setThresholdCount} />
+        <button className="threshold-btn" onClick={() => setShowScoreConfig(true)} title="Configurar intervalos de score">
+          ⚙ Score
+        </button>
         <DatasetList />
         {rows.length > 0 && (
           <span className="row-count">{rows.length} registros</span>
         )}
       </header>
+
+      {showScoreConfig && <ScoreConfigPanel onClose={() => setShowScoreConfig(false)} />}
 
       {rows.length > 0 ? (
         <div className="main-layout">

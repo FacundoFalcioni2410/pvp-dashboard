@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 import pandas as pd
@@ -63,6 +63,12 @@ def ensure_catalog():
         CREATE TABLE IF NOT EXISTS thresholds (
             mla TEXT PRIMARY KEY,
             allowed_pct REAL NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS score_config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
         )
     """)
     conn.commit()
@@ -245,6 +251,54 @@ def startup():
 
 
 # ---------------------------------------------------------------------------
+# Score config
+# ---------------------------------------------------------------------------
+
+DEFAULT_SCORE_BANDS: list[float] = [5.0, 10.0, 15.0, 20.0, 25.0, 30.0]
+_score_config_cache: list[float] | None = None
+
+
+def get_score_config() -> list[float]:
+    global _score_config_cache
+    if _score_config_cache is not None:
+        return _score_config_cache
+    conn = get_catalog_conn()
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS score_config (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+        row = conn.execute("SELECT value FROM score_config WHERE key = 'bands'").fetchone()
+        _score_config_cache = json.loads(row[0]) if row else DEFAULT_SCORE_BANDS[:]
+        return _score_config_cache
+    finally:
+        conn.close()
+
+
+def save_score_config(bands: list[float]) -> None:
+    global _score_config_cache
+    conn = get_catalog_conn()
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS score_config (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
+        conn.execute(
+            "INSERT OR REPLACE INTO score_config (key, value) VALUES ('bands', ?)",
+            (json.dumps(bands),),
+        )
+        conn.commit()
+        _score_config_cache = bands
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
 # Score helpers
 # ---------------------------------------------------------------------------
 
@@ -256,16 +310,15 @@ def compute_score(pct_diff, threshold: float = 15.0) -> int:
         return 0
     if abs(val) <= 1.5:
         val = val * 100
-    abs_pct = abs(val)
-    # Normalize by per-SKU threshold so that threshold% maps to the same
-    # score as 15% does in the default scale (score 6).
-    if threshold and threshold > 0:
-        abs_pct = abs_pct * (15.0 / threshold)
-    if abs_pct < 5:
-        score = 10
-    else:
-        score = 8 - math.floor((abs_pct - 5) / 5)
-    return max(1, min(10, score))
+    abs_val = math.floor(abs(val) + 0.5)  # round half away from zero, same as frontend
+    excess = abs_val - threshold
+    if excess < 0:
+        return 8
+    bands = get_score_config()
+    for i, band in enumerate(bands):
+        if excess <= band:
+            return 7 - i
+    return 1
 
 def parse_float(val):
     if val is None:
@@ -659,6 +712,28 @@ def build_response(rows: list[dict], all_rows: list[dict] | None = None) -> str:
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/score-config")
+def get_score_config_endpoint():
+    return {"bands": get_score_config()}
+
+
+@app.put("/score-config")
+async def put_score_config_endpoint(request: Request):
+    body = await request.json()
+    bands = body.get("bands", [])
+    if not bands:
+        raise HTTPException(status_code=400, detail="Se requiere al menos un intervalo")
+    try:
+        bands = [float(b) for b in bands]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Los umbrales deben ser números")
+    for i in range(1, len(bands)):
+        if bands[i] <= bands[i - 1]:
+            raise HTTPException(status_code=400, detail="Los umbrales deben ser estrictamente crecientes")
+    save_score_config(bands)
+    return {"bands": bands}
 
 
 @app.post("/upload-thresholds")

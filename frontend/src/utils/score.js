@@ -38,7 +38,7 @@ export function fmtPct(row, field) {
   if (val == null) return "—";
   const n = parseFloat(val);
   if (isNaN(n)) return "—";
-  return `${Math.round(n)}%`;
+  return `${Math.sign(n) * Math.round(Math.abs(n))}%`;
 }
 
 export function fmt(val) {

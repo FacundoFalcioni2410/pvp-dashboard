@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useCallback, useEffect } from "rea
 
 const DashboardContext = createContext(null);
 
+const DEFAULT_SCORE_BANDS = [5, 10, 15, 20, 25, 30];
+
 export function DashboardProvider({ children }) {
   const [dashboardData, setDashboardDataState] = useState(null);
   const [datasets, setDatasets] = useState([]);
@@ -10,32 +12,54 @@ export function DashboardProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [compareDatasetId, setCompareDatasetId] = useState(null);
+  const [scoreConfig, setScoreConfigState] = useState({ bands: DEFAULT_SCORE_BANDS });
 
   useEffect(() => {
     let cancelled = false;
-    const attempt = async (retriesLeft) => {
+
+    async function loadAll(attempt = 0) {
       try {
-        const res = await fetch("/init");
+        const [initRes, scoreRes] = await Promise.all([
+          fetch("/init"),
+          fetch("/score-config"),
+        ]);
+
         if (cancelled) return;
-        const data = res.status === 204 ? null : await res.json();
-        if (data) {
-          setDatasets(data.datasets ?? []);
-          setActiveDatasetId(data.activeDatasetId ?? null);
-          setThresholdCount(data.thresholdCount ?? 0);
-          setDashboardDataState(data);
+
+        const scoreData = scoreRes.ok
+          ? await scoreRes.json().catch(() => ({ bands: DEFAULT_SCORE_BANDS }))
+          : { bands: DEFAULT_SCORE_BANDS };
+
+        if (initRes.status === 503 || !initRes.ok && initRes.status !== 204) {
+          // Backend not ready yet — retry after a short delay
+          if (attempt < 10) setTimeout(() => loadAll(attempt + 1), 1500);
+          else setLoading(false);
+          return;
         }
+
+        const initData = initRes.status === 204 ? null : await initRes.json().catch(() => null);
+
+        if (initData) {
+          setDatasets(initData.datasets ?? []);
+          setActiveDatasetId(initData.activeDatasetId ?? null);
+          setThresholdCount(initData.thresholdCount ?? 0);
+          setDashboardDataState(initData);
+        }
+        setScoreConfigState(scoreData);
         setLoading(false);
       } catch {
         if (cancelled) return;
-        if (retriesLeft > 0) {
-          setTimeout(() => attempt(retriesLeft - 1), 1500);
-        } else {
-          setLoading(false);
-        }
+        if (attempt < 10) setTimeout(() => loadAll(attempt + 1), 1500);
+        else setLoading(false);
       }
-    };
-    attempt(5);
+    }
+
+    loadAll();
     return () => { cancelled = true; };
+  }, []);
+
+  const setScoreConfig = useCallback((config) => {
+    setScoreConfigState(config);
   }, []);
 
   const setDashboardData = useCallback((data) => {
@@ -141,6 +165,8 @@ export function DashboardProvider({ children }) {
       setThresholdCount,
       compareDatasetId,
       setCompareDatasetId,
+      scoreConfig,
+      setScoreConfig,
     }}>
       {children}
     </DashboardContext.Provider>

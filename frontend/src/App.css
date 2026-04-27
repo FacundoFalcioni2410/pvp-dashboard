@@ -1666,3 +1666,173 @@ html, body {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* ── Score config modal ── */
+.score-config-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+
+.score-config-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 360px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+}
+
+.score-config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.score-config-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.score-config-subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: -6px;
+}
+
+.score-config-table {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.score-config-thead {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 10px;
+  padding: 0 2px 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.score-config-row {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 2px;
+}
+
+.score-config-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.score-config-op {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.score-config-input {
+  width: 64px;
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+  outline: none;
+  text-align: right;
+  transition: border-color 0.15s;
+}
+
+.score-config-input:focus {
+  border-color: var(--accent);
+}
+
+.score-config-unit {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.score-config-fixed {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.score-config-error {
+  font-size: 12px;
+  color: var(--red);
+  margin-top: -4px;
+}
+
+.score-config-success {
+  font-size: 12px;
+  color: var(--green);
+  margin-top: -4px;
+}
+
+.score-config-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.score-config-cancel {
+  background: var(--surface2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.score-config-cancel:hover {
+  background: var(--surface3);
+  color: var(--text);
+}
+
+.score-config-save {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 7px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  min-width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.score-config-save:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.score-config-save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
