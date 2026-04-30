@@ -97,8 +97,6 @@ def build_sku_score_chart(rows: list[dict]) -> list:
 def build_scatter_data(rows: list[dict], max_points: int = 500) -> list:
     scatter = []
     for row in rows:
-        if (row.get(TIPO_CLIENTE_COL) or "").strip() == "CONTRABANDO":
-            continue
         pct = normalise_pct(row.get(PCT_DIF_COL))
         score = row.get("score")
         if pct is not None and score is not None:
@@ -116,8 +114,6 @@ def build_infraction_chart(rows: list[dict], threshold: int = 15) -> list:
     deduped = _deduplicate_by_mla_day(rows)
     imap = defaultdict(lambda: {"count": 0, "total": 0, "usuario": ""})
     for row in deduped:
-        if (row.get(TIPO_CLIENTE_COL) or "").strip() == "CONTRABANDO":
-            continue
         razon = (row.get(RAZON_SOCIAL_COL) or "Sin nombre").strip()
         pct = normalise_pct(row.get(PCT_DIF_COL))
         imap[razon]["total"] += 1
@@ -143,8 +139,6 @@ def build_high_deviation_chart(rows: list[dict], threshold: int = 40) -> list:
     deduped = _deduplicate_by_mla_day(rows)
     dmap = defaultdict(lambda: {"count": 0, "total": 0, "usuario": ""})
     for row in deduped:
-        if (row.get(TIPO_CLIENTE_COL) or "").strip() == "CONTRABANDO":
-            continue
         razon = (row.get(RAZON_SOCIAL_COL) or "Sin nombre").strip()
         pct = normalise_pct(row.get(PCT_DIF_COL))
         dmap[razon]["total"] += 1
@@ -171,8 +165,6 @@ def build_sku_deviation_chart(rows: list[dict], threshold: int = 10) -> list:
     deduped = _deduplicate_by_mla_day(rows)
     smap = defaultdict(lambda: {"count": 0, "total": 0, "pct_sum": 0, "descripcion": "", "rot": ""})
     for row in deduped:
-        if (row.get(TIPO_CLIENTE_COL) or "").strip() == "CONTRABANDO":
-            continue
         sku = (row.get(SKU_COL) or row.get(MLA_COL) or "Sin SKU").strip()
         pct = normalise_pct(row.get(PCT_DIF_COL))
         smap[sku]["total"] += 1
