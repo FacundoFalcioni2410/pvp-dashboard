@@ -79,9 +79,10 @@ function FilterDropdown({ label, options, value, onChange }) {
   );
 }
 
-function MultiSelectFilter({ label, options, values = [], onChange }) {
+function MultiSelectFilter({ label, options, values = [], onChange, exclusiveOptions = [], showSelectAll = true }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [tempValues, setTempValues] = useState(values);
   const wrapRef = useRef();
   const inputRef = useRef();
 
@@ -92,43 +93,59 @@ function MultiSelectFilter({ label, options, values = [], onChange }) {
   }, []);
 
   useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
+  useEffect(() => { setTempValues(values); }, [values]);
 
   const filtered = query.trim()
     ? options.filter((o) => o.toLowerCase().includes(query.toLowerCase()))
     : options;
 
   function toggle(v) {
-    const next = values.includes(v)
-      ? values.filter((x) => x !== v)
-      : [...values, v];
-    onChange(next);
+    setTempValues((prev) => {
+      if (exclusiveOptions.includes(v)) {
+        return [v];
+      }
+      const next = prev.includes(v)
+        ? prev.filter((x) => x !== v)
+        : [...prev, v];
+      if (exclusiveOptions.some((e) => next.includes(e))) {
+        return next.filter((x) => !exclusiveOptions.includes(x) || x === v);
+      }
+      return next;
+    });
   }
 
   function selectAll() {
-    onChange(options);
+    setTempValues(options.filter((o) => !exclusiveOptions.includes(o)));
   }
 
   function clearAll() {
-    onChange([]);
+    setTempValues([]);
   }
 
-  const displayValue = values.length === 0
+  function apply() {
+    onChange(tempValues);
+    setOpen(false);
+  }
+
+  const displayValue = tempValues.length === 0
     ? "Todos"
-    : values.length === options.length
+    : tempValues.length === options.length
     ? "Todos"
-    : values.join(", ");
+    : tempValues.join(", ");
+
+  const hasChanges = JSON.stringify(tempValues.sort()) !== JSON.stringify(values.sort());
 
   return (
     <div ref={wrapRef} className="gf-wrap">
       <button
-        className={`gf-trigger ${open ? "open" : ""} ${values.length > 0 ? "gf-active" : ""}`}
+        className={`gf-trigger ${open ? "open" : ""} ${tempValues.length > 0 ? "gf-active" : ""}`}
         onClick={() => setOpen((o) => !o)}
         type="button"
       >
         <span className="gf-label">{label}</span>
-        <span className={`gf-value ${values.length === 0 ? "placeholder" : ""}`}>{displayValue}</span>
-        {values.length > 0 && (
-          <span className="gf-clear" onMouseDown={(e) => { e.stopPropagation(); onChange([]); }}>✕</span>
+        <span className={`gf-value ${tempValues.length === 0 ? "placeholder" : ""}`}>{displayValue}</span>
+        {tempValues.length > 0 && (
+          <span className="gf-clear" onMouseDown={(e) => { e.stopPropagation(); setTempValues([]); }}>✕</span>
         )}
         <span className="gf-arrow">{open ? "▲" : "▼"}</span>
       </button>
@@ -143,18 +160,25 @@ function MultiSelectFilter({ label, options, values = [], onChange }) {
             />
           </div>
           <ul className="filter-suggestions">
-            <li className={`filter-suggestion-item ${values.length === 0 ? "active" : ""}`} onMouseDown={selectAll}>
-              {values.length === options.length ? "Deseleccionar todos" : "Seleccionar todos"}
-            </li>
+            {showSelectAll && options.length > 0 && (
+              <li className={`filter-suggestion-item ${tempValues.length === 0 ? "active" : ""}`} onMouseDown={(e) => { e.stopPropagation(); tempValues.length === options.length ? clearAll() : selectAll(); }}>
+                {tempValues.length === options.length ? "Deseleccionar todos" : "Seleccionar todos"}
+              </li>
+            )}
             {filtered.map((o) => (
-              <li key={o} className={`filter-suggestion-item ${values.includes(o) ? "active" : ""}`} onMouseDown={(e) => { e.stopPropagation(); toggle(o); }}>
-                {values.includes(o) ? "✓ " : ""}{o}
+              <li key={o} className={`filter-suggestion-item ${tempValues.includes(o) ? "active" : ""}`} onMouseDown={(e) => { e.stopPropagation(); toggle(o); }}>
+                {tempValues.includes(o) ? "✓ " : ""}{o}
               </li>
             ))}
             {filtered.length === 0 && (
               <li className="filter-suggestion-more">Sin resultados</li>
             )}
           </ul>
+          <div className="gf-dropdown-actions">
+            <button className="gf-apply-btn" onClick={(e) => { e.stopPropagation(); apply(); }} disabled={!hasChanges}>
+              Aplicar
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -163,6 +187,7 @@ function MultiSelectFilter({ label, options, values = [], onChange }) {
 
 function GlobalFiltersBar({ filterOptions, globalFilters, setGlobalFilter }) {
   const hasActive = Object.values(globalFilters).some((v) => (Array.isArray(v) ? v.length > 0 : Boolean(v)));
+  const exclusiveCanales = ["AMBOS", "ONLINE", "OFFLINE"];
   return (
     <div className={`global-filters ${hasActive ? "has-active" : ""}`}>
       <span className="gf-title">Filtros</span>
@@ -172,22 +197,24 @@ function GlobalFiltersBar({ filterOptions, globalFilters, setGlobalFilter }) {
         values={globalFilters.tipoCliente ?? []}
         onChange={(v) => setGlobalFilter("tipoCliente", v)}
       />
-      <FilterDropdown
+      <MultiSelectFilter
         label="Canal"
         options={filterOptions.canales ?? []}
-        value={globalFilters.canal}
+        values={globalFilters.canal ?? []}
         onChange={(v) => setGlobalFilter("canal", v)}
+        exclusiveOptions={exclusiveCanales.filter((o) => (filterOptions.canales ?? []).includes(o))}
+        showSelectAll={false}
       />
-      <FilterDropdown
+      <MultiSelectFilter
         label="Macrofamilia"
         options={filterOptions.macrofamilias ?? []}
-        value={globalFilters.macrofamilia}
+        values={globalFilters.macrofamilia ?? []}
         onChange={(v) => setGlobalFilter("macrofamilia", v)}
       />
-      <FilterDropdown
+      <MultiSelectFilter
         label="Rotación"
         options={filterOptions.rots ?? []}
-        value={globalFilters.rot}
+        values={globalFilters.rot ?? []}
         onChange={(v) => setGlobalFilter("rot", v)}
       />
       {hasActive && (

@@ -362,6 +362,46 @@ html, body {
   box-shadow: 0 4px 16px rgba(0,0,0,0.3);
 }
 
+.gf-dropdown-actions {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  background: var(--surface2);
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+.gf-apply-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 18px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.gf-apply-btn:hover:not(:disabled) {
+  background: #5558e3;
+  box-shadow: 0 3px 12px rgba(99, 102, 241, 0.4);
+  transform: translateY(-1px);
+}
+
+.gf-apply-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.3);
+}
+
+.gf-apply-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .gf-clear-all {
   margin-left: 4px;
   background: none;

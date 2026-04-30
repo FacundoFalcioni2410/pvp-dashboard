@@ -68,10 +68,14 @@ def get_data(
     filter_options = build_filter_options(raw_rows)
 
     tipo_cliente_list = [t.strip() for t in tipoCliente.split(",") if t.strip()] if tipoCliente else []
-    rows_no_rot = apply_global_filters(raw_rows, tipoCliente=tipo_cliente_list, canal=canal, macrofamilia=macrofamilia)
-    rows_filtered = apply_global_filters(rows_no_rot, rot=rot) if rot else rows_no_rot
-    all_no_rot = apply_global_filters(raw_all_rows, tipoCliente=tipo_cliente_list, canal=canal, macrofamilia=macrofamilia)
-    all_filtered = apply_global_filters(all_no_rot, rot=rot) if rot else all_no_rot
+    canal_list = [c.strip() for c in canal.split(",") if c.strip()] if canal else []
+    macrofamilia_list = [m.strip() for m in macrofamilia.split(",") if m.strip()] if macrofamilia else []
+    rot_list = [r.strip() for r in rot.split(",") if r.strip()] if rot else []
+
+    rows_no_rot = apply_global_filters(raw_rows, tipoCliente=tipo_cliente_list, canal=canal_list, macrofamilia=macrofamilia_list)
+    rows_filtered = apply_global_filters(rows_no_rot, rot=rot_list) if rot_list else rows_no_rot
+    all_no_rot = apply_global_filters(raw_all_rows, tipoCliente=tipo_cliente_list, canal=canal_list, macrofamilia=macrofamilia_list)
+    all_filtered = apply_global_filters(all_no_rot, rot=rot_list) if rot_list else all_no_rot
 
     body = json.loads(build_response(rows_filtered, all_filtered, rot_rows=rows_no_rot))
     body["filterOptions"] = filter_options

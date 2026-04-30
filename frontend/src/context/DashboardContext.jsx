@@ -3,7 +3,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef } f
 const DashboardContext = createContext(null);
 
 const DEFAULT_SCORE_BANDS = [5, 10, 15, 20, 25, 30];
-const DEFAULT_FILTERS = { tipoCliente: [], canal: "", macrofamilia: "", rot: "" };
+const DEFAULT_FILTERS = { tipoCliente: [], canal: [], macrofamilia: [], rot: [] };
 
 export function DashboardProvider({ children }) {
   const [dashboardData, setDashboardDataState] = useState(null);
@@ -114,9 +114,9 @@ export function DashboardProvider({ children }) {
     if (date) params.set("date", date);
     if (datasetId != null) params.set("dataset_id", datasetId);
     if (filters.tipoCliente && filters.tipoCliente.length > 0) params.set("tipoCliente", filters.tipoCliente.join(","));
-    if (filters.canal) params.set("canal", filters.canal);
-    if (filters.macrofamilia) params.set("macrofamilia", filters.macrofamilia);
-    if (filters.rot) params.set("rot", filters.rot);
+    if (filters.canal && filters.canal.length > 0) params.set("canal", filters.canal.join(","));
+    if (filters.macrofamilia && filters.macrofamilia.length > 0) params.set("macrofamilia", filters.macrofamilia.join(","));
+    if (filters.rot && filters.rot.length > 0) params.set("rot", filters.rot.join(","));
     return params;
   }
 

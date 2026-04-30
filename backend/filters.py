@@ -21,12 +21,18 @@ def apply_global_filters(rows, tipoCliente=None, canal=None, macrofamilia=None, 
             row_tipo = (row.get(TIPO_CLIENTE_COL) or "").strip().upper()
             if row_tipo not in [t.upper() for t in tipoCliente]:
                 return False
-        if canal and (row.get(CANAL_COL) or "").strip().upper() != canal.upper():
-            return False
-        if macrofamilia and (row.get(MACRO_FAMILIA_COL) or "").strip().upper() != macrofamilia.upper():
-            return False
-        if rot and (row.get(ROT_COL) or "").strip().upper() != rot.upper():
-            return False
+        if canal and len(canal) > 0:
+            row_canal = (row.get(CANAL_COL) or "").strip().upper()
+            if row_canal not in [c.upper() for c in canal]:
+                return False
+        if macrofamilia and len(macrofamilia) > 0:
+            row_macro = (row.get(MACRO_FAMILIA_COL) or "").strip().upper()
+            if row_macro not in [m.upper() for m in macrofamilia]:
+                return False
+        if rot and len(rot) > 0:
+            row_rot = (row.get(ROT_COL) or "").strip().upper()
+            if row_rot not in [r.upper() for r in rot]:
+                return False
         return True
     return [r for r in rows if matches(r)]
 

@@ -70,8 +70,6 @@ def aggregate_clients(rows: list[dict]) -> list:
 def build_sku_score_chart(rows: list[dict]) -> list:
     sku_map = defaultdict(lambda: {"scores": [], "descripcion": ""})
     for row in rows:
-        if (row.get(TIPO_CLIENTE_COL) or "").strip() == "CONTRABANDO":
-            continue
         sku = (row.get(SKU_COL) or row.get(MLA_COL) or "Sin SKU").strip()
         score = row.get("score")
         try:
@@ -211,12 +209,9 @@ def build_sku_deviation_chart(rows: list[dict], threshold: int = 10) -> list:
 def build_rot_chart(rows: list[dict], threshold: int = 15) -> list:
     rmap = defaultdict(lambda: {"scores": [], "infraction_count": 0, "total": 0})
     for row in rows:
-        if (row.get(TIPO_CLIENTE_COL) or "").strip() == "CONTRABANDO":
-            continue
         rot = (row.get(ROT_COL) or "").strip().upper()
         if not rot:
             continue
-        pct = normalise_pct(row.get(PCT_DIF_COL))
         score = row.get("score")
         rmap[rot]["total"] += 1
         if score is not None:
@@ -224,7 +219,7 @@ def build_rot_chart(rows: list[dict], threshold: int = 15) -> list:
                 rmap[rot]["scores"].append(int(score))
             except (ValueError, TypeError):
                 pass
-        if pct is not None and abs(pct) >= threshold:
+        if abs(score) > 0 and abs(score) <= threshold:
             rmap[rot]["infraction_count"] += 1
     results = []
     for rot, d in rmap.items():
@@ -244,13 +239,15 @@ def build_deviation_chart(rows: list[dict], threshold: int = 15) -> list:
     deduped = _deduplicate_by_mla_day(rows)
     dmap = defaultdict(lambda: {"count": 0, "total": 0, "usuario": ""})
     for row in deduped:
-        if (row.get(TIPO_CLIENTE_COL) or "").strip() == "CONTRABANDO":
-            continue
         razon = (row.get(RAZON_SOCIAL_COL) or "Sin nombre").strip()
-        pct = normalise_pct(row.get(PCT_DIF_COL))
+        score = row.get("score")
         dmap[razon]["total"] += 1
         dmap[razon]["usuario"] = (row.get(USUARIO_ML_COL) or "").strip()
-        if pct is not None and abs(pct) >= threshold:
+        try:
+            score_num = int(score) if score is not None else 0
+        except (ValueError, TypeError):
+            score_num = 0
+        if score_num > 0 and score_num <= threshold:
             dmap[razon]["count"] += 1
     results = []
     for name, d in dmap.items():
@@ -290,33 +287,37 @@ def build_monthly_summary(rows: list[dict]) -> dict:
 
 def build_monthly_deviation_chart(rows: list[dict], threshold: int = 15) -> list:
     deduped = _deduplicate_by_mla_day(rows)
-    mmap = defaultdict(lambda: defaultdict(lambda: {"count": 0, "total": 0, "pct_sum": 0.0}))
+    mmap = defaultdict(lambda: defaultdict(lambda: {"count": 0, "total": 0, "score_sum": 0.0}))
     for row in deduped:
         razon = (row.get(RAZON_SOCIAL_COL) or "Sin nombre").strip()
         fecha = str(row.get(FECHA_COL) or "")[:7]
         if not fecha or len(fecha) < 7:
             continue
-        pct = normalise_pct(row.get(PCT_DIF_COL))
+        score = row.get("score")
+        try:
+            score_num = int(score) if score is not None else 0
+        except (ValueError, TypeError):
+            score_num = 0
         mmap[fecha][razon]["total"] += 1
-        if pct is not None:
-            mmap[fecha][razon]["pct_sum"] += abs(pct)
-            if abs(pct) >= threshold:
+        if score_num > 0:
+            mmap[fecha][razon]["score_sum"] += score_num
+            if score_num <= threshold:
                 mmap[fecha][razon]["count"] += 1
     results = []
     for month in sorted(mmap.keys()):
-        month_total = month_count = month_pct_count = 0
-        month_pct_sum = 0.0
+        month_total = month_count = month_score_count = 0
+        month_score_sum = 0.0
         for razon, d in mmap[month].items():
             month_total += d["total"]
             month_count += d["count"]
-            month_pct_sum += d["pct_sum"]
-            month_pct_count += d["total"]
+            month_score_sum += d["score_sum"]
+            month_score_count += d["total"]
         if month_total > 0:
             results.append({
                 "month": month,
                 "count": month_count,
                 "total": month_total,
                 "pctDeviation": round(100 * month_count / month_total),
-                "avgDeviation": round(month_pct_sum / month_pct_count, 1) if month_pct_count > 0 else 0,
+                "avgScore": round(month_score_sum / month_score_count) if month_score_count > 0 else 0,
             })
     return results
