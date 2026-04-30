@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import FileUpload from "./components/FileUpload";
 import ClientList from "./components/ClientList";
@@ -13,6 +13,194 @@ import DatasetList from "./components/DatasetList";
 import ThresholdUpload from "./components/ThresholdUpload";
 import { useDashboard } from "./context/DashboardContext";
 import "./App.css";
+
+function FilterDropdown({ label, options, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapRef = useRef();
+  const inputRef = useRef();
+
+  useEffect(() => {
+    function handler(e) { if (!wrapRef.current?.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
+
+  const filtered = query.trim()
+    ? options.filter((o) => o.toLowerCase().includes(query.toLowerCase()))
+    : options;
+
+  function select(v) { onChange(v); setQuery(""); setOpen(false); }
+
+  return (
+    <div ref={wrapRef} className="gf-wrap">
+      <button
+        className={`gf-trigger ${open ? "open" : ""} ${value ? "gf-active" : ""}`}
+        onClick={() => setOpen((o) => !o)}
+        type="button"
+      >
+        <span className="gf-label">{label}</span>
+        <span className={`gf-value ${!value ? "placeholder" : ""}`}>{value || "Todos"}</span>
+        {value && (
+          <span className="gf-clear" onMouseDown={(e) => { e.stopPropagation(); onChange(""); setOpen(false); }}>✕</span>
+        )}
+        <span className="gf-arrow">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="gf-dropdown">
+          <div className="filter-search-wrap">
+            <input
+              ref={inputRef}
+              className="filter-search-input"
+              type="text"
+              placeholder={`Buscar…`}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setOpen(false);
+                if (e.key === "Enter" && filtered.length === 1) select(filtered[0]);
+              }}
+            />
+          </div>
+          <ul className="filter-suggestions">
+            <li className={`filter-suggestion-item ${!value ? "active" : ""}`} onMouseDown={() => select("")}>Todos</li>
+            {filtered.slice(0, 50).map((o) => (
+              <li key={o} className={`filter-suggestion-item ${value === o ? "active" : ""}`} onMouseDown={() => select(o)}>{o}</li>
+            ))}
+            {filtered.length > 50 && (
+              <li className="filter-suggestion-more">+{filtered.length - 50} más — refiná la búsqueda</li>
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MultiSelectFilter({ label, options, values = [], onChange }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapRef = useRef();
+  const inputRef = useRef();
+
+  useEffect(() => {
+    function handler(e) { if (!wrapRef.current?.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
+
+  const filtered = query.trim()
+    ? options.filter((o) => o.toLowerCase().includes(query.toLowerCase()))
+    : options;
+
+  function toggle(v) {
+    const next = values.includes(v)
+      ? values.filter((x) => x !== v)
+      : [...values, v];
+    onChange(next);
+  }
+
+  function selectAll() {
+    onChange(options);
+  }
+
+  function clearAll() {
+    onChange([]);
+  }
+
+  const displayValue = values.length === 0
+    ? "Todos"
+    : values.length === options.length
+    ? "Todos"
+    : values.join(", ");
+
+  return (
+    <div ref={wrapRef} className="gf-wrap">
+      <button
+        className={`gf-trigger ${open ? "open" : ""} ${values.length > 0 ? "gf-active" : ""}`}
+        onClick={() => setOpen((o) => !o)}
+        type="button"
+      >
+        <span className="gf-label">{label}</span>
+        <span className={`gf-value ${values.length === 0 ? "placeholder" : ""}`}>{displayValue}</span>
+        {values.length > 0 && (
+          <span className="gf-clear" onMouseDown={(e) => { e.stopPropagation(); onChange([]); }}>✕</span>
+        )}
+        <span className="gf-arrow">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="gf-dropdown">
+          <div className="filter-search-wrap">
+            <input ref={inputRef} className="filter-search-input" type="text" placeholder={`Buscar…`}
+              value={query} onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setOpen(false);
+              }}
+            />
+          </div>
+          <ul className="filter-suggestions">
+            <li className={`filter-suggestion-item ${values.length === 0 ? "active" : ""}`} onMouseDown={selectAll}>
+              {values.length === options.length ? "Deseleccionar todos" : "Seleccionar todos"}
+            </li>
+            {filtered.map((o) => (
+              <li key={o} className={`filter-suggestion-item ${values.includes(o) ? "active" : ""}`} onMouseDown={(e) => { e.stopPropagation(); toggle(o); }}>
+                {values.includes(o) ? "✓ " : ""}{o}
+              </li>
+            ))}
+            {filtered.length === 0 && (
+              <li className="filter-suggestion-more">Sin resultados</li>
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GlobalFiltersBar({ filterOptions, globalFilters, setGlobalFilter }) {
+  const hasActive = Object.values(globalFilters).some((v) => (Array.isArray(v) ? v.length > 0 : Boolean(v)));
+  return (
+    <div className={`global-filters ${hasActive ? "has-active" : ""}`}>
+      <span className="gf-title">Filtros</span>
+      <MultiSelectFilter
+        label="Tipo de cliente"
+        options={["Cliente", "Seller", "Contrabando"]}
+        values={globalFilters.tipoCliente ?? []}
+        onChange={(v) => setGlobalFilter("tipoCliente", v)}
+      />
+      <FilterDropdown
+        label="Canal"
+        options={filterOptions.canales ?? []}
+        value={globalFilters.canal}
+        onChange={(v) => setGlobalFilter("canal", v)}
+      />
+      <FilterDropdown
+        label="Macrofamilia"
+        options={filterOptions.macrofamilias ?? []}
+        value={globalFilters.macrofamilia}
+        onChange={(v) => setGlobalFilter("macrofamilia", v)}
+      />
+      <FilterDropdown
+        label="Rotación"
+        options={filterOptions.rots ?? []}
+        value={globalFilters.rot}
+        onChange={(v) => setGlobalFilter("rot", v)}
+      />
+      {hasActive && (
+        <button
+          className="gf-clear-all"
+          onClick={() => setGlobalFilter("__clear__", "")}
+        >
+          Limpiar filtros
+        </button>
+      )}
+    </div>
+  );
+}
 
 
 const THEMES = {
@@ -217,9 +405,14 @@ export default function App() {
   const navigate = useNavigate();
   const { theme, toggle: toggleTheme } = useTheme();
   const [showScoreConfig, setShowScoreConfig] = useState(false);
-  const { dashboardData, setDashboardData, loading, loadingData, thresholdCount, setThresholdCount, datasets } = useDashboard();
+  const {
+    dashboardData, setDashboardData, loading, loadingData,
+    thresholdCount, setThresholdCount, datasets,
+    globalFilters, setGlobalFilter, filterOptions,
+  } = useDashboard();
 
   const rows = dashboardData?.rows ?? [];
+  const hasDataset = dashboardData !== null && (dashboardData.dates?.length > 0 || dashboardData.clients?.length > 0);
 
   if (loading) {
     return (
@@ -256,7 +449,15 @@ export default function App() {
 
       {showScoreConfig && <ScoreConfigPanel onClose={() => setShowScoreConfig(false)} />}
 
-      {rows.length > 0 ? (
+      {hasDataset && (
+        <GlobalFiltersBar
+          filterOptions={filterOptions}
+          globalFilters={globalFilters}
+          setGlobalFilter={setGlobalFilter}
+        />
+      )}
+
+      {hasDataset ? (
         <div className="main-layout">
           <Routes>
             <Route path="/" element={<Dashboard />} />

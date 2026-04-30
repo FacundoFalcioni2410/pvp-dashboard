@@ -322,6 +322,9 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
                       title="Ver cliente"
                     >
                       {fmt(r[FIELDS.RAZON_SOCIAL])}
+                      {(r[FIELDS.TIPO_DE_CLIENTE] ?? "").toUpperCase() === "CONTRABANDO" && (
+                        <span className="contrabando-tag" style={{ marginLeft: 6 }}>⚠ CONTRABANDO</span>
+                      )}
                     </td>
                     <td>{fmt(r[FIELDS.PRECIO])}</td>
                     <td>{fmt(r[FIELDS.PVP])}</td>

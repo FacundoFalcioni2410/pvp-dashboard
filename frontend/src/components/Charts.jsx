@@ -402,7 +402,13 @@ export default function Charts({ clients, allDatesClients, infractionChart, allD
     onSelect(client, pctThreshold);
   }
 
-  if (!clients || clients.length === 0) return null;
+  if (!clients || clients.length === 0) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, color: "var(--text-muted)", fontSize: 16 }}>
+        No hay datos para los filtros seleccionados.
+      </div>
+    );
+  }
 
   return (
     <div className="charts">

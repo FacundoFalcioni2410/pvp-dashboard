@@ -262,6 +262,123 @@ html, body {
   margin-left: auto;
 }
 
+/* ── Global filters bar ── */
+.global-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 0 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.gf-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+
+.global-filters.has-active .gf-title {
+  color: var(--accent);
+}
+
+.gf-wrap {
+  position: relative;
+}
+
+.gf-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s;
+}
+
+.gf-trigger:hover,
+.gf-trigger.open {
+  border-color: var(--accent);
+}
+
+.gf-trigger.gf-active {
+  border-color: var(--accent);
+  background: var(--surface2);
+}
+
+.gf-label {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.gf-value {
+  color: var(--text);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gf-value.placeholder {
+  color: var(--text-muted);
+}
+
+.gf-clear {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.gf-clear:hover {
+  color: var(--red);
+}
+
+.gf-arrow {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+.gf-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 200;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 200px;
+  max-width: 280px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+
+.gf-clear-all {
+  margin-left: 4px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.gf-clear-all:hover {
+  color: var(--red);
+  border-color: var(--red);
+}
+
 /* ── Main layout ── */
 .main-layout {
   display: grid;
@@ -605,6 +722,10 @@ html, body {
   font-size: 13px;
   line-height: 1.3;
   word-break: break-word;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .client-usuario {
@@ -634,6 +755,45 @@ html, body {
 .score-yellow { background: var(--yellow); }
 .score-orange { background: var(--orange); }
 .score-red    { background: var(--red); color: #fff; }
+
+/* ── Contrabando tag ── */
+.contrabando-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  background: #7c2d12;
+  border: 1px solid #ef4444;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.client-item.contrabando-item {
+  border-left: 3px solid #ef4444;
+  padding-left: 13px;
+}
+
+.client-item.contrabando-item.selected {
+  border-left: 3px solid #ef4444;
+}
+
+/* ── Type filter row ── */
+.type-filter-row {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+
+.tf-CONTRABANDO { border-color: #ef4444 !important; }
+.tf-CONTRABANDO.active { background: #7c2d12 !important; color: #fff !important; border-color: #ef4444 !important; }
+.tf-SELLER.active { background: var(--accent) !important; color: #fff !important; }
+.tf-CLIENTE.active { background: var(--accent) !important; color: #fff !important; }
+
 
 .empty {
   padding: 20px 16px;

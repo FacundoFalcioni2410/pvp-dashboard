@@ -46,6 +46,12 @@ const SCORE_FILTERS = [
   { label: "Óptimo", value: "green", min: 8, max: 10 },
 ];
 
+const TYPE_OPTIONS = [
+  { label: "Seller", value: "SELLER" },
+  { label: "Cliente", value: "CLIENTE" },
+  { label: "Contrabando", value: "CONTRABANDO" },
+];
+
 const SORT = {
   SCORE_ASC: "score_asc",
   SCORE_DESC: "score_desc",
@@ -140,12 +146,21 @@ export default function ClientList({ clients, rows, onSelect, selectedName, onSe
   const [search] = useState("");
   const [mlUser, setMlUser] = useState("");
   const [scoreFilter, setScoreFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState(new Set());
   const [sortBy, setSortBy] = useState(SORT.SCORE_ASC);
   const [page, setPage] = useState(0);
 
   const deferredSearch = useDeferredValue(search);
   const deferredMlUser = useDeferredValue(mlUser);
   const deferredScoreFilter = useDeferredValue(scoreFilter);
+  const deferredTypeFilter = useDeferredValue(typeFilter);
+  function toggleType(value) {
+    setTypeFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value); else next.add(value);
+      return next;
+    });
+  }
   const deferredSortBy = useDeferredValue(sortBy);
 
   const clientSkus = useMemo(() => {
@@ -180,10 +195,13 @@ export default function ClientList({ clients, rows, onSelect, selectedName, onSe
         const f = SCORE_FILTERS.find((x) => x.value === deferredScoreFilter);
         if (f && (c.avgScore < f.min || c.avgScore > f.max)) return false;
       }
+      if (deferredTypeFilter.size > 0) {
+        if (!deferredTypeFilter.has((c.tipo ?? "").toUpperCase())) return false;
+      }
       return true;
     });
     return applySort(filtered, deferredSortBy);
-  }, [clients, clientSkus, deferredSearch, deferredMlUser, deferredScoreFilter, deferredSortBy]);
+  }, [clients, clientSkus, deferredSearch, deferredMlUser, deferredScoreFilter, deferredTypeFilter, deferredSortBy]);
 
   const visible = (page + 1) * PAGE_SIZE;
   const shown = sorted.slice(0, visible);
@@ -191,11 +209,8 @@ export default function ClientList({ clients, rows, onSelect, selectedName, onSe
 
   function handleSelect(client) {
     const clientRows = rows.filter((r) =>
-      (
-        (r[FIELDS.RAZON_SOCIAL] ?? "Sin nombre") === client.name &&
-        (!mlUser || r[FIELDS.USUARIO_ML] === mlUser)
-      ) ||
-      (r[FIELDS.TIPO_DE_CLIENTE] ?? "") === "CONTRABANDO"
+      (r[FIELDS.RAZON_SOCIAL] ?? "Sin nombre") === client.name &&
+      (!mlUser || r[FIELDS.USUARIO_ML] === mlUser)
     );
     onSelect({ ...client, rows: clientRows });
   }
@@ -218,28 +233,50 @@ export default function ClientList({ clients, rows, onSelect, selectedName, onSe
         </select>
       </div>
 
+      <div className="list-controls type-filter-row">
+        <div className="score-filter-btns">
+          <button
+            className={`sf-btn ${typeFilter.size === 0 ? "active" : ""}`}
+            onClick={() => setTypeFilter(new Set())}
+          >Todos</button>
+          {TYPE_OPTIONS.map((f) => (
+            <button
+              key={f.value}
+              className={`sf-btn tf-${f.value} ${typeFilter.has(f.value) ? "active" : ""}`}
+              onClick={() => toggleType(f.value)}
+            >{f.label}</button>
+          ))}
+        </div>
+      </div>
+
       {sorted.length === 0 ? (
         <p className="empty">Sin resultados.</p>
       ) : (
         <>
           <ul className="client-list">
-            {shown.map((c) => (
-              <li key={c.name}
-                className={`client-item ${selectedName === c.name ? "selected" : ""}`}
-                onClick={() => handleSelect(c)}
-              >
-                <div className="client-info">
-                  <span className="client-name">{c.name}</span>
-                  {c.usuario && <span className="client-usuario">{c.usuario}</span>}
-                  {clientSkus[c.name] && clientSkus[c.name].length > 0 && (
-                    <span className="client-usuario">
-                      <ProductDropdown skus={clientSkus[c.name]} onSelect={(s) => onSelectProduct && onSelectProduct(s)} />
+            {shown.map((c) => {
+              const isContrabando = (c.tipo ?? "").toUpperCase() === "CONTRABANDO";
+              return (
+                <li key={c.name}
+                  className={`client-item ${selectedName === c.name ? "selected" : ""} ${isContrabando ? "contrabando-item" : ""}`}
+                  onClick={() => handleSelect(c)}
+                >
+                  <div className="client-info">
+                    <span className="client-name">
+                      {c.name}
+                      {isContrabando && <span className="contrabando-tag">⚠ CONTRABANDO</span>}
                     </span>
-                  )}
-                </div>
-                <span className={`score-badge ${scoreClass(c.avgScore)}`}>{c.avgScore}</span>
-              </li>
-            ))}
+                    {c.usuario && <span className="client-usuario">{c.usuario}</span>}
+                    {clientSkus[c.name] && clientSkus[c.name].length > 0 && (
+                      <span className="client-usuario">
+                        <ProductDropdown skus={clientSkus[c.name]} onSelect={(s) => onSelectProduct && onSelectProduct(s)} />
+                      </span>
+                    )}
+                  </div>
+                  <span className={`score-badge ${scoreClass(c.avgScore)}`}>{c.avgScore}</span>
+                </li>
+              );
+            })}
           </ul>
           {remaining > 0 && (
             <button className="load-more-btn" onClick={() => setPage((p) => p + 1)}>

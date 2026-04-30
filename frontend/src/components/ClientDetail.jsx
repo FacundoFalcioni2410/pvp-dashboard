@@ -275,7 +275,12 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
   return (
     <div className="detail-panel">
       <div className="detail-header">
-        <h2>{client.name}</h2>
+        <h2>
+          {client.name}
+          {(client.tipo ?? "").toUpperCase() === "CONTRABANDO" && (
+            <span className="contrabando-tag" style={{ marginLeft: 10, fontSize: 13, verticalAlign: "middle" }}>⚠ CONTRABANDO</span>
+          )}
+        </h2>
         <span className="detail-count">{rows.length} registros</span>
         {pctThreshold !== null && (
           <span className="detail-filter-badge">
