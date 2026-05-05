@@ -79,7 +79,7 @@ function FilterDropdown({ label, options, value, onChange }) {
   );
 }
 
-function MultiSelectFilter({ label, options, values = [], onChange, exclusiveOptions = [], showSelectAll = true }) {
+function MultiSelectFilter({ label, options, values = [], onChange, exclusiveOptions = [], showSelectAll = true, labelMap = {} }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [tempValues, setTempValues] = useState(values);
@@ -131,7 +131,7 @@ function MultiSelectFilter({ label, options, values = [], onChange, exclusiveOpt
     ? "Todos"
     : tempValues.length === options.length
     ? "Todos"
-    : tempValues.join(", ");
+    : tempValues.map((v) => labelMap[v] ?? v).join(", ");
 
   const hasChanges = JSON.stringify(tempValues.sort()) !== JSON.stringify(values.sort());
 
@@ -167,7 +167,7 @@ function MultiSelectFilter({ label, options, values = [], onChange, exclusiveOpt
             )}
             {filtered.map((o) => (
               <li key={o} className={`filter-suggestion-item ${tempValues.includes(o) ? "active" : ""}`} onMouseDown={(e) => { e.stopPropagation(); toggle(o); }}>
-                {tempValues.includes(o) ? "✓ " : ""}{o}
+                {tempValues.includes(o) ? "✓ " : ""}{labelMap[o] ?? o}
               </li>
             ))}
             {filtered.length === 0 && (
@@ -193,9 +193,10 @@ function GlobalFiltersBar({ filterOptions, globalFilters, setGlobalFilter }) {
       <span className="gf-title">Filtros</span>
       <MultiSelectFilter
         label="Tipo de cliente"
-        options={["Cliente", "Seller", "Contrabando"]}
+        options={filterOptions.tipoCliente ?? []}
         values={globalFilters.tipoCliente ?? []}
         onChange={(v) => setGlobalFilter("tipoCliente", v)}
+        labelMap={{ "#ND": "SIN CLASIFICAR" }}
       />
       <MultiSelectFilter
         label="Canal"

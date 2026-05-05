@@ -72,6 +72,17 @@ def get_data(
     macrofamilia_list = [m.strip() for m in macrofamilia.split(",") if m.strip()] if macrofamilia else []
     rot_list = [r.strip() for r in rot.split(",") if r.strip()] if rot else []
 
+    # Selecting every available option is semantically identical to no filter; clear the list
+    # so rows with no value for that field are not incorrectly excluded.
+    if tipo_cliente_list and {t.upper() for t in tipo_cliente_list} >= {t.upper() for t in filter_options.get("tipoCliente", [])}:
+        tipo_cliente_list = []
+    if canal_list and {c.upper() for c in canal_list} >= {c.upper() for c in filter_options.get("canales", [])}:
+        canal_list = []
+    if macrofamilia_list and {m.upper() for m in macrofamilia_list} >= {m.upper() for m in filter_options.get("macrofamilias", [])}:
+        macrofamilia_list = []
+    if rot_list and {r.upper() for r in rot_list} >= {r.upper() for r in filter_options.get("rots", [])}:
+        rot_list = []
+
     rows_no_rot = apply_global_filters(raw_rows, tipoCliente=tipo_cliente_list, canal=canal_list, macrofamilia=macrofamilia_list)
     rows_filtered = apply_global_filters(rows_no_rot, rot=rot_list) if rot_list else rows_no_rot
     all_no_rot = apply_global_filters(raw_all_rows, tipoCliente=tipo_cliente_list, canal=canal_list, macrofamilia=macrofamilia_list)

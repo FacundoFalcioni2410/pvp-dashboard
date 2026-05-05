@@ -259,20 +259,19 @@ def build_deviation_chart(rows: list[dict], threshold: int = 15) -> list:
 
 def build_monthly_summary(rows: list[dict]) -> dict:
     deduped = _deduplicate_by_mla_day(rows)
-    skus = set()
-    pct_sum = 0.0
-    pct_count = 0
+    sku_pcts: dict[str, list[float]] = defaultdict(list)
     for row in deduped:
         sku = str(row.get(SKU_COL) or row.get(MLA_COL) or "").strip()
-        if sku:
-            skus.add(sku)
+        if not sku:
+            continue
         pct = normalise_pct(row.get(PCT_DIF_COL))
         if pct is not None:
-            pct_sum += abs(pct)
-            pct_count += 1
+            sku_pcts[sku].append(abs(pct))
+    sku_avgs = [sum(v) / len(v) for v in sku_pcts.values() if v]
+    avg_deviation = round(sum(sku_avgs) / len(sku_avgs), 1) if sku_avgs else 0
     return {
-        "skuCount": len(skus),
-        "avgDeviation": round(pct_sum / pct_count, 1) if pct_count > 0 else 0,
+        "skuCount": len(sku_pcts),
+        "avgDeviation": avg_deviation,
         "totalPubs": len(deduped),
     }
 
