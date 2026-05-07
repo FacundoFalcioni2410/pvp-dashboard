@@ -47,7 +47,7 @@ def apply_global_filters(rows, tipoCliente=None, canal=None, macrofamilia=None, 
 
 
 def build_filter_options(rows) -> dict:
-    canales = sorted({(r.get(CANAL_COL) or "").strip() for r in rows if (r.get(CANAL_COL) or "").strip()})
+    canales = sorted({(r.get(CANAL_COL) or "").strip() for r in rows if (r.get(CANAL_COL) or "").strip() and not (r.get(CANAL_COL) or "").strip().lstrip("-").isdigit()})
     macrofamilias = sorted({(r.get(MACRO_FAMILIA_COL) or "").strip() for r in rows if (r.get(MACRO_FAMILIA_COL) or "").strip()})
     rots = sorted({(r.get(ROT_COL) or "").strip().upper() for r in rows if (r.get(ROT_COL) or "").strip()})
     tipos = sorted({_normalise_tipo(r.get(TIPO_CLIENTE_COL)) for r in rows})

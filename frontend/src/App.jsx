@@ -144,8 +144,8 @@ function MultiSelectFilter({ label, options, values = [], onChange, exclusiveOpt
       >
         <span className="gf-label">{label}</span>
         <span className={`gf-value ${tempValues.length === 0 ? "placeholder" : ""}`}>{displayValue}</span>
-        {tempValues.length > 0 && (
-          <span className="gf-clear" onMouseDown={(e) => { e.stopPropagation(); setTempValues([]); }}>✕</span>
+        {values.length > 0 && (
+          <span className="gf-clear" onMouseDown={(e) => { e.stopPropagation(); onChange([]); setTempValues([]); setOpen(false); }}>✕</span>
         )}
         <span className="gf-arrow">{open ? "▲" : "▼"}</span>
       </button>
@@ -187,7 +187,6 @@ function MultiSelectFilter({ label, options, values = [], onChange, exclusiveOpt
 
 function GlobalFiltersBar({ filterOptions, globalFilters, setGlobalFilter }) {
   const hasActive = Object.values(globalFilters).some((v) => (Array.isArray(v) ? v.length > 0 : Boolean(v)));
-  const exclusiveCanales = ["AMBOS", "ONLINE", "OFFLINE"];
   return (
     <div className={`global-filters ${hasActive ? "has-active" : ""}`}>
       <span className="gf-title">Filtros</span>
@@ -203,8 +202,6 @@ function GlobalFiltersBar({ filterOptions, globalFilters, setGlobalFilter }) {
         options={filterOptions.canales ?? []}
         values={globalFilters.canal ?? []}
         onChange={(v) => setGlobalFilter("canal", v)}
-        exclusiveOptions={exclusiveCanales.filter((o) => (filterOptions.canales ?? []).includes(o))}
-        showSelectAll={false}
       />
       <MultiSelectFilter
         label="Macrofamilia"
