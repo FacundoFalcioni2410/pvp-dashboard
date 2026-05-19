@@ -10,6 +10,7 @@ export const FIELDS = {
   DESCRIPCION: "DESCRIPCION",
   PRECIO: "Precio",
   PVP: "PVP",
+  CANAL: "CANAL",
 };
 
 export function scoreColor(score) {

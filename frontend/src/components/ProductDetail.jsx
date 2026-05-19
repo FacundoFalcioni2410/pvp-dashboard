@@ -120,6 +120,11 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
 
   const description = rows[0]?.[FIELDS.DESCRIPCION] ?? "";
   const allowedPct = rows[0]?.allowed_pct ?? null;
+  const canal = useMemo(() => {
+    const cs = new Set(rows.map((r) => (r[FIELDS.CANAL] || "").trim().toUpperCase()).filter(Boolean));
+    const uniq = [...cs];
+    return uniq.length === 0 ? null : uniq.length === 1 ? uniq[0] : "AMBOS";
+  }, [rows]);
 
   const sortedRows = useMemo(() => {
     if (!sortCol) return rows;
@@ -206,7 +211,22 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
     <div className="detail-panel">
       <div className="detail-header">
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <h2>{sku}</h2>
+          <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {sku}
+            {canal && (
+              <span style={{
+                fontSize: 11,
+                fontWeight: 700,
+                padding: "2px 7px",
+                borderRadius: 4,
+                background: canal === "ONLINE" ? "#3b82f6" : canal === "OFFLINE" ? "#a855f7" : "#6b7280",
+                color: "#fff",
+                letterSpacing: "0.04em",
+              }}>
+                {canal}
+              </span>
+            )}
+          </h2>
           {description && (
             <span className="detail-count" style={{ fontSize: 13 }}>{description}</span>
           )}
