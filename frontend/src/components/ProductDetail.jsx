@@ -125,6 +125,10 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
     const uniq = [...cs];
     return uniq.length === 0 ? null : uniq.length === 1 ? uniq[0] : "AMBOS";
   }, [rows]);
+  const rot = useMemo(() => {
+    const rs = new Set(rows.map((r) => (r[FIELDS.ROT] || "").trim().toUpperCase()).filter(Boolean));
+    return rs.size === 0 ? null : [...rs].join(" / ");
+  }, [rows]);
 
   const sortedRows = useMemo(() => {
     if (!sortCol) return rows;
@@ -224,6 +228,19 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
                 letterSpacing: "0.04em",
               }}>
                 {canal}
+              </span>
+            )}
+            {rot && (
+              <span style={{
+                fontSize: 11,
+                fontWeight: 700,
+                padding: "2px 7px",
+                borderRadius: 4,
+                background: "#f59e0b",
+                color: "#fff",
+                letterSpacing: "0.04em",
+              }}>
+                {rot}
               </span>
             )}
           </h2>

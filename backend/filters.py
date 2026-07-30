@@ -14,13 +14,11 @@ from charts import (
     build_sku_score_chart,
 )
 
-KNOWN_TIPOS = {"SELLER", "CONTRABANDO", "CLIENTE"}
-SIN_CLASIFICAR = "#ND"
+EMPTY_TIPO_VALUES = {"", "-", "N/A", "NA", "0"}
 
 
 def _normalise_tipo(raw) -> str:
-    v = (raw or "").strip().upper()
-    return v if v in KNOWN_TIPOS else SIN_CLASIFICAR
+    return (raw or "").strip().upper()
 
 
 def apply_global_filters(rows, tipoCliente=None, canal=None, macrofamilia=None, rot=None):
@@ -28,7 +26,7 @@ def apply_global_filters(rows, tipoCliente=None, canal=None, macrofamilia=None, 
 
     def matches(row):
         if selected_tipos:
-            if _normalise_tipo(row.get(TIPO_CLIENTE_COL)).upper() not in selected_tipos:
+            if _normalise_tipo(row.get(TIPO_CLIENTE_COL)) not in selected_tipos:
                 return False
         if canal and len(canal) > 0:
             row_canal = (row.get(CANAL_COL) or "").strip().upper()
@@ -50,7 +48,11 @@ def build_filter_options(rows) -> dict:
     canales = sorted({(r.get(CANAL_COL) or "").strip() for r in rows if (r.get(CANAL_COL) or "").strip() and not (r.get(CANAL_COL) or "").strip().lstrip("-").isdigit()})
     macrofamilias = sorted({(r.get(MACRO_FAMILIA_COL) or "").strip() for r in rows if (r.get(MACRO_FAMILIA_COL) or "").strip()})
     rots = sorted({(r.get(ROT_COL) or "").strip().upper() for r in rows if (r.get(ROT_COL) or "").strip()})
-    tipos = sorted({_normalise_tipo(r.get(TIPO_CLIENTE_COL)) for r in rows})
+    tipos = sorted({
+        _normalise_tipo(r.get(TIPO_CLIENTE_COL))
+        for r in rows
+        if _normalise_tipo(r.get(TIPO_CLIENTE_COL)) not in EMPTY_TIPO_VALUES
+    })
     return {"tipoCliente": tipos, "canales": canales, "macrofamilias": macrofamilias, "rots": rots}
 
 

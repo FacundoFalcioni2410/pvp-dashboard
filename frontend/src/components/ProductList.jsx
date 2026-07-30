@@ -20,6 +20,24 @@ function CanalBadge({ canal }) {
   );
 }
 
+function RotBadge({ rot }) {
+  return (
+    <span style={{
+      fontSize: 10,
+      fontWeight: 700,
+      padding: "1px 5px",
+      borderRadius: 4,
+      background: "#f59e0b",
+      color: "#fff",
+      letterSpacing: "0.04em",
+      verticalAlign: "middle",
+      marginLeft: 6,
+    }}>
+      {rot}
+    </span>
+  );
+}
+
 const PAGE_SIZE = 30;
 
 const SCORE_FILTERS = [
@@ -91,7 +109,7 @@ export default function ProductList({ rows, onSelect, selectedSku, onSelectClien
       const sku = row[FIELDS.SKU];
       if (!sku || sku === "None" || sku === "nan") continue;
       if (!map[sku]) {
-        map[sku] = { sku, description: row[FIELDS.DESCRIPCION] ?? "", scores: [], allowedPct: null, clientList: [], canales: new Set() };
+        map[sku] = { sku, description: row[FIELDS.DESCRIPCION] ?? "", scores: [], allowedPct: null, clientList: [], canales: new Set(), rots: new Set() };
       }
       if (row.score != null) map[sku].scores.push(Number(row.score));
       if (row[FIELDS.RAZON_SOCIAL] && !map[sku].clientList.includes(row[FIELDS.RAZON_SOCIAL])) {
@@ -102,14 +120,19 @@ export default function ProductList({ rows, onSelect, selectedSku, onSelectClien
       }
       const c = (row[FIELDS.CANAL] || "").trim().toUpperCase();
       if (c) map[sku].canales.add(c);
+      const r = (row[FIELDS.ROT] || "").trim().toUpperCase();
+      if (r) map[sku].rots.add(r);
     }
     return Object.values(map).map((p) => {
       const cs = p.canales;
       const uniq = [...cs];
       const canal = uniq.length === 0 ? null : uniq.length === 1 ? uniq[0] : "AMBOS";
+      const rotUniq = [...p.rots];
+      const rot = rotUniq.length === 0 ? null : rotUniq.join(" / ");
       return {
         ...p,
         canal,
+        rot,
         clients: p.clientList.length,
         avgScore: p.scores.length > 0 ? Math.round(p.scores.reduce((a, b) => a + b, 0) / p.scores.length) : 0,
       };
@@ -178,6 +201,7 @@ export default function ProductList({ rows, onSelect, selectedSku, onSelectClien
                   <span className="client-name">
                     {p.sku}
                     {p.canal && <CanalBadge canal={p.canal} />}
+                    {p.rot && <RotBadge rot={p.rot} />}
                   </span>
                   <span className="client-usuario" title={p.description}>{p.description || "—"}</span>
                   <span className="client-usuario">
