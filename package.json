@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "concurrently --names \"api,web\" --prefix-colors \"cyan,magenta\" \"python -m uvicorn backend.main:app --reload --port 8000\" \"npm run dev --prefix frontend\""
+    "dev": "git pull && npm i && concurrently --names \"api,web\" --prefix-colors \"cyan,magenta\" \"python -m uvicorn backend.main:app --reload --port 8000\" \"npm run dev --prefix frontend\""
   },
   "keywords": [],
   "author": "",

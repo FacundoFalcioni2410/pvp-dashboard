@@ -25,6 +25,19 @@ def _deduplicate_by_mla_day(rows: list[dict]) -> list[dict]:
     return list(best.values())
 
 
+def _deduplicate_by_sku_day(rows: list[dict]) -> list[dict]:
+    best: dict[tuple, dict] = {}
+    for row in rows:
+        razon = row.get(RAZON_SOCIAL_COL) or "Sin nombre"
+        sku = (row.get(SKU_COL) or row.get(MLA_COL) or "").strip()
+        fecha = str(row.get(FECHA_COL) or "")[:10]
+        key = (razon, sku, fecha)
+        abs_pct = abs(normalise_pct(row.get(PCT_DIF_COL)) or 0)
+        if key not in best or abs_pct > abs(normalise_pct(best[key].get(PCT_DIF_COL)) or 0):
+            best[key] = row
+    return list(best.values())
+
+
 def _deduplicate_by_mla(rows: list[dict]) -> list[dict]:
     best: dict[tuple, dict] = {}
     for row in rows:
@@ -228,7 +241,7 @@ def build_rot_chart(rows: list[dict], threshold: int = 15) -> list:
 
 
 def build_deviation_chart(rows: list[dict], threshold: int = 15) -> list:
-    deduped = _deduplicate_by_mla_day(rows)
+    deduped = _deduplicate_by_sku_day(rows)
     dmap = defaultdict(lambda: {"count": 0, "total": 0, "usuario": ""})
     for row in deduped:
         razon = (row.get(RAZON_SOCIAL_COL) or "Sin nombre").strip()
@@ -254,7 +267,7 @@ def build_deviation_chart(rows: list[dict], threshold: int = 15) -> list:
             })
     results = [r for r in results if r["count"] > 0]
     results.sort(key=lambda x: x["count"], reverse=True)
-    return results[:50]
+    return results[:15]
 
 
 def build_monthly_summary(rows: list[dict]) -> dict:

@@ -285,8 +285,6 @@ function Dashboard() {
   const allDatesInfractionChart = dashboardData?.allDatesDeviationChart ?? [];
   const monthlyDeviationChart = dashboardData?.monthlyDeviationChart ?? [];
   const monthlySummary = dashboardData?.monthlySummary ?? {};
-  const skuScoreChart = dashboardData?.skuScoreChart ?? [];
-  const allDatesSkuScoreChart = dashboardData?.allDatesSkuScoreChart ?? [];
   const skuDeviationChart = dashboardData?.skuDeviationChart ?? [];
   const rotChart = dashboardData?.rotChart ?? [];
 
@@ -400,25 +398,20 @@ function Dashboard() {
             onSelectClient={(clientName) => navigate(`/client/${encodeURIComponent(clientName)}`)}
           />
         ) : (
-          <div style={{ display: "flex", gap: 16, minHeight: 0, flex: 1 }}>
-            <div className="charts-wrap">
-<Charts
-                clients={clients}
-                allDatesClients={allDatesClients}
-                rows={rows}
-                scatter={scatter}
-                infractionChart={infractionChart}
-                allDatesInfractionChart={allDatesInfractionChart}
-                monthlySummary={monthlySummary}
-                skuScoreChart={skuScoreChart}
-                allDatesSkuScoreChart={allDatesSkuScoreChart}
-                skuDeviationChart={skuDeviationChart}
-                rotChart={rotChart}
-                onSelect={handleSelectClient}
-                onSelectSku={(sku) => navigate(`/product/${encodeURIComponent(sku)}`)}
-              />
-            </div>
-            <ScoreLegend />
+          <div className="charts-wrap">
+            <Charts
+              clients={clients}
+              allDatesClients={allDatesClients}
+              rows={rows}
+              scatter={scatter}
+              infractionChart={infractionChart}
+              allDatesInfractionChart={allDatesInfractionChart}
+              monthlySummary={monthlySummary}
+              skuDeviationChart={skuDeviationChart}
+              rotChart={rotChart}
+              onSelect={handleSelectClient}
+              onSelectSku={(sku) => navigate(`/product/${encodeURIComponent(sku)}`)}
+            />
           </div>
         )}
       </section>
@@ -463,9 +456,7 @@ export default function App() {
         </button>
         <FileUpload onData={setDashboardData} />
         <ThresholdUpload thresholdCount={thresholdCount} onUploaded={setThresholdCount} />
-        <button className="threshold-btn" onClick={() => setShowScoreConfig(true)} title="Configurar intervalos de score">
-          ⚙ Score
-        </button>
+        <ScoreLegend onEdit={() => setShowScoreConfig(true)} />
         <DatasetList />
         {rows.length > 0 && (
           <span className="row-count">{rows.length} registros</span>

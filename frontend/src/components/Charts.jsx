@@ -1,26 +1,41 @@
 import { useState, useMemo, memo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
-  ResponsiveContainer, Cell, LabelList,
+  ResponsiveContainer, Cell, LabelList, PieChart, Pie, Legend,
 } from "recharts";
+import GridLayout, { WidthProvider } from "react-grid-layout/legacy";
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
 import { scoreColor } from "../utils/score";
 import { getTooltipStyle } from "../utils/theme";
 
-const CHART_PAGE = 15;
-const CHART_H = CHART_PAGE * 32;
+const Grid = WidthProvider(GridLayout);
 
-function CollapsibleChart({ title, children, defaultOpen = true }) {
+const CHART_PAGE = 15;
+
+const PIE_COLORS_LIGHT = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"];
+const PIE_COLORS_DARK = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181"];
+
+function getPieColors() {
+  const light = document.documentElement.getAttribute("data-theme") === "light";
+  return light ? PIE_COLORS_LIGHT : PIE_COLORS_DARK;
+}
+
+function CollapsibleChart({ title, children, defaultOpen = true, className = "", draggable = false }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className="chart-card">
+    <div className={`chart-card ${className}`}>
       <div className="chart-header">
-        <h3>{title}</h3>
+        <div className="chart-header-title">
+          {draggable && <span className="drag-handle" title="Arrastrar para mover">⠿</span>}
+          <h3>{title}</h3>
+        </div>
         <button className="collapse-btn" onClick={() => setIsOpen(!isOpen)}>
           {isOpen ? "▼" : "▶"}
         </button>
       </div>
-      {isOpen && children}
+      {isOpen && <div className="chart-body">{children}</div>}
     </div>
   );
 }
@@ -120,23 +135,25 @@ const BarPanel = memo(function BarPanel({ data, allDatesData, onSelect }) {
           <button className="pager-btn" disabled={page === totalPages - 1} onClick={() => setPage((p) => p + 1)}>›</button>
         </div>
       )}
-      <ResponsiveContainer width="100%" height={CHART_H}>
-        <BarChart data={pageData} layout="vertical" margin={{ top: 4, right: 36, left: 4, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
-          <XAxis type="number" domain={[0, 10]} tick={{ fontSize: 11 }} />
-          <YAxis type="category" dataKey="displayName" width={140} tick={{ fontSize: 11 }} />
-          <Tooltip
-            {...getTooltipStyle()}
-            formatter={(v, name, payload) => [`Score: ${v}`, payload[0]?.payload?.fullName || payload[0]?.payload?.name || ""]}
-          />
-          <Bar dataKey="avgScore" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelect?.(d)}>
-            {pageData.map((entry, i) => (
-              <Cell key={i} fill={scoreColor(entry.avgScore)} />
-            ))}
-            <LabelList dataKey="avgScore" position="insideRight" style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }} />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      <div className="chart-flex-fill">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={pageData} layout="vertical" margin={{ top: 4, right: 36, left: 4, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
+            <XAxis type="number" domain={[0, 10]} tick={{ fontSize: 11 }} />
+            <YAxis type="category" dataKey="displayName" width={140} tick={{ fontSize: 11 }} />
+            <Tooltip
+              {...getTooltipStyle()}
+              formatter={(v, name, payload) => [`Score: ${v}`, payload[0]?.payload?.fullName || payload[0]?.payload?.name || ""]}
+            />
+            <Bar dataKey="avgScore" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelect?.(d)}>
+              {pageData.map((entry, i) => (
+                <Cell key={i} fill={scoreColor(entry.avgScore)} />
+              ))}
+              <LabelList dataKey="avgScore" position="insideRight" style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }} />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </>
   );
 });
@@ -147,40 +164,41 @@ const InfractionPanel = memo(function InfractionPanel({ data, onSelect }) {
     [data]
   );
   const maxCount = useMemo(() => Math.max(...data.map((d) => d.count), 1), [data]);
-  const h = Math.max(sorted.length * 32 + 20, 120);
   return (
-    <ResponsiveContainer width="100%" height={h}>
-      <BarChart data={sorted} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
-        <XAxis
-          type="number"
-          domain={[0, maxCount]}
-          tick={{ fontSize: 11 }}
-        />
-        <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 10 }} />
-        <Tooltip
-          {...getTooltipStyle()}
-          content={({ payload, label }) => {
-            if (!payload?.length) return null;
-            const d = payload[0].payload;
-            return (
-              <div style={getTooltipStyle().contentStyle}>
-                <p style={{ marginBottom: 4, fontWeight: 600 }}>{d.fullName || label}</p>
-                <p>% Infracción (≥15%): {d.pctInfraccion}%</p>
-                <p>Publicaciones en infracción: {d.count} / {d.total}</p>
-              </div>
-            );
-          }}
-        />
-        <Bar dataKey="count" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelect?.(d, 15)} cursor="pointer">
-          {sorted.map((entry, i) => (
-            <Cell key={i} fill={entry.pctInfraccion >= 50 ? "#ef4444" : entry.pctInfraccion >= 30 ? "#f97316" : "#eab308"} />
-          ))}
-          <LabelList dataKey="count" position="insideRight"
-            style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }} />
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="chart-flex-fill">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={sorted} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
+          <XAxis
+            type="number"
+            domain={[0, maxCount]}
+            tick={{ fontSize: 11 }}
+          />
+          <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 10 }} />
+          <Tooltip
+            {...getTooltipStyle()}
+            content={({ payload, label }) => {
+              if (!payload?.length) return null;
+              const d = payload[0].payload;
+              return (
+                <div style={getTooltipStyle().contentStyle}>
+                  <p style={{ marginBottom: 4, fontWeight: 600 }}>{d.fullName || label}</p>
+                  <p>% Infracción (≥15%): {d.pctInfraccion}%</p>
+                  <p>Publicaciones en infracción: {d.count} / {d.total}</p>
+                </div>
+              );
+            }}
+          />
+          <Bar dataKey="count" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelect?.(d, 15)} cursor="pointer">
+            {sorted.map((entry, i) => (
+              <Cell key={i} fill={entry.pctInfraccion >= 50 ? "#ef4444" : entry.pctInfraccion >= 30 ? "#f97316" : "#eab308"} />
+            ))}
+            <LabelList dataKey="count" position="insideRight"
+              style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }} />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 });
 
@@ -216,88 +234,72 @@ const RotChart = memo(function RotChart({ data }) {
         <button className={`chart-sort-btn ${byScore ? "active" : ""}`} onClick={() => setMetric("avgScore")}>Score promedio</button>
         <button className={`chart-sort-btn ${!byScore ? "active" : ""}`} onClick={() => setMetric("pctInfraccion")}>% desvío</button>
       </div>
-      <ResponsiveContainer width="100%" height={Math.max(data.length * 40 + 20, 120)}>
-        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 48, left: 16, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
-          <XAxis type="number" domain={[0, byScore ? 10 : maxVal]} tick={{ fontSize: 11 }}
-            tickFormatter={byScore ? undefined : (v) => `${v}%`} />
-          <YAxis type="category" dataKey="name" width={36} tick={{ fontSize: 13, fontWeight: 600 }} />
-          <Tooltip
-            {...getTooltipStyle()}
-            content={({ payload }) => {
-              if (!payload?.length) return null;
-              const d = payload[0].payload;
-              return (
-                <div style={getTooltipStyle().contentStyle}>
-                  <p style={{ marginBottom: 4, fontWeight: 700 }}>Rotación {d.rot}</p>
-                  <p>Score promedio: {d.avgScore}</p>
-                  <p>% desvío: {d.pctInfraccion}%</p>
-                  <p>Publicaciones: {d.total}</p>
-                </div>
-              );
-            }}
-          />
-          <Bar dataKey={metric} radius={[0, 4, 4, 0]} isAnimationActive={false}>
-            {data.map((entry, i) => (
-              <Cell key={i} fill={byScore ? scoreColor(entry.avgScore) : (entry.pctInfraccion >= 50 ? "#ef4444" : entry.pctInfraccion >= 25 ? "#f97316" : "#eab308")} />
-            ))}
-            <LabelList dataKey={metric} position="insideRight"
-              style={{ fill: "#fff", fontSize: 12, fontWeight: 700 }}
-              formatter={byScore ? undefined : (v) => `${v}%`} />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      <div className="chart-flex-fill">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} layout="vertical" margin={{ top: 4, right: 48, left: 16, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
+            <XAxis type="number" domain={[0, byScore ? 10 : maxVal]} tick={{ fontSize: 11 }}
+              tickFormatter={byScore ? undefined : (v) => `${v}%`} />
+            <YAxis type="category" dataKey="name" width={36} tick={{ fontSize: 13, fontWeight: 600 }} />
+            <Tooltip
+              {...getTooltipStyle()}
+              content={({ payload }) => {
+                if (!payload?.length) return null;
+                const d = payload[0].payload;
+                return (
+                  <div style={getTooltipStyle().contentStyle}>
+                    <p style={{ marginBottom: 4, fontWeight: 700 }}>Rotación {d.rot}</p>
+                    <p>Score promedio: {d.avgScore}</p>
+                    <p>% desvío: {d.pctInfraccion}%</p>
+                    <p>Publicaciones: {d.total}</p>
+                  </div>
+                );
+              }}
+            />
+            <Bar dataKey={metric} radius={[0, 4, 4, 0]} isAnimationActive={false}>
+              {data.map((entry, i) => (
+                <Cell key={i} fill={byScore ? scoreColor(entry.avgScore) : (entry.pctInfraccion >= 50 ? "#ef4444" : entry.pctInfraccion >= 25 ? "#f97316" : "#eab308")} />
+              ))}
+              <LabelList dataKey={metric} position="insideRight"
+                style={{ fill: "#fff", fontSize: 12, fontWeight: 700 }}
+                formatter={byScore ? undefined : (v) => `${v}%`} />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </>
   );
 });
 
-const SkuDeviationPanel = memo(function SkuDeviationPanel({ data, onSelectSku }) {
-  const [sortBy, setSortBy] = useState("count");
-  const [rotFilter, setRotFilter] = useState(null);
-
-  const availableRots = useMemo(() => {
-    const rots = [...new Set(data.map((d) => d.rot).filter(Boolean))].sort();
-    return rots;
-  }, [data]);
-
-  const filtered = useMemo(() =>
-    rotFilter ? data.filter((d) => d.rot === rotFilter) : data,
-    [data, rotFilter]
+const TopRotosPie = memo(function TopRotosPie({ data, onSelectSku }) {
+  const top5 = useMemo(
+    () => [...data].sort((a, b) => b.count - a.count).slice(0, 5),
+    [data]
   );
-  const sorted = useMemo(() => {
-    const mapped = filtered.map(d => ({...d, absAvgPct: Math.abs(d.avgPct || 0)}));
-    return sortBy === "avgPct" 
-      ? [...mapped].sort((a, b) => b.absAvgPct - a.absAvgPct)
-      : [...mapped].sort((a, b) => b.count - a.count);
-  }, [filtered, sortBy]);
-
-  const maxCount = useMemo(() => Math.max(...sorted.map((d) => d.count), 1), [sorted]);
-  const maxAbs = useMemo(() => Math.max(...sorted.map((d) => d.absAvgPct), 1), [sorted]);
-  const h = Math.max(sorted.length * 32 + 20, 120);
-  const byPct = sortBy === "avgPct";
+  const colors = getPieColors();
+  const total = useMemo(() => top5.reduce((s, d) => s + d.count, 0), [top5]);
 
   return (
-    <>
-      <div className="chart-sort-btns">
-        <button className={`chart-sort-btn ${!byPct ? "active" : ""}`} onClick={() => setSortBy("count")}>Cantidad</button>
-        <button className={`chart-sort-btn ${byPct ? "active" : ""}`} onClick={() => setSortBy("avgPct")}>% promedio de desvío</button>
-      </div>
-      {availableRots.length > 0 && (
-        <div className="chart-sort-btns" style={{ marginTop: 4 }}>
-          <button className={`chart-sort-btn ${!rotFilter ? "active" : ""}`} onClick={() => setRotFilter(null)}>Todos</button>
-          {availableRots.map((r) => (
-            <button key={r} className={`chart-sort-btn ${rotFilter === r ? "active" : ""}`} onClick={() => setRotFilter(r)}>
-              {r}
-            </button>
-          ))}
-        </div>
-      )}
-      <ResponsiveContainer width="100%" height={h}>
-        <BarChart data={sorted} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
-          <XAxis type="number" domain={[0, byPct ? maxAbs : maxCount]} tick={{ fontSize: 11 }}
-            tickFormatter={byPct ? (v) => `${v}%` : undefined} />
-          <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 10 }} />
+    <div className="chart-flex-fill">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={top5}
+            dataKey="count"
+            nameKey="sku"
+            cx="50%"
+            cy="46%"
+            outerRadius="70%"
+            isAnimationActive={false}
+            onClick={(d) => onSelectSku?.(d.sku)}
+            cursor="pointer"
+            label={({ count }) => (total ? `${Math.round((100 * count) / total)}%` : "")}
+            labelLine={false}
+          >
+            {top5.map((entry, i) => (
+              <Cell key={entry.sku} fill={colors[i % colors.length]} />
+            ))}
+          </Pie>
           <Tooltip
             {...getTooltipStyle()}
             content={({ payload }) => {
@@ -307,99 +309,112 @@ const SkuDeviationPanel = memo(function SkuDeviationPanel({ data, onSelectSku })
                 <div style={getTooltipStyle().contentStyle}>
                   <p style={{ marginBottom: 4, fontWeight: 600 }}>{d.sku}</p>
                   {d.descripcion && <p style={{ marginBottom: 4, color: "#aaa", fontSize: 11 }}>{d.descripcion}</p>}
-                  {d.rot && <p style={{ marginBottom: 4, fontSize: 11 }}>Rotación: {d.rot}</p>}
                   <p>Publicaciones en infracción: {d.count} / {d.total}</p>
-                  {d.avgPct !== undefined && <p>Promedio desvío: {d.avgPct}%</p>}
                 </div>
               );
             }}
           />
-          <Bar dataKey={byPct ? "absAvgPct" : "count"} radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelectSku?.(d.sku)} cursor="pointer">
-            {sorted.map((entry, i) => (
-              <Cell key={i} fill={entry.avgPct <= -30 ? "#ef4444" : entry.avgPct <= -15 ? "#f97316" : "#eab308"} />
-            ))}
-            <LabelList dataKey={byPct ? "absAvgPct" : "count"} position="insideRight"
-              style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }}
-              formatter={byPct ? (v) => `${-v}%` : undefined} />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </>
-  );
-});
-
-const SkuScorePanel = memo(function SkuScorePanel({ data, allDatesData, onSelectSku }) {
-  const [view, setView] = useState("day");
-  const [page, setPage] = useState(0);
-
-  const raw = view === "day" ? data : allDatesData;
-  const allSorted = useMemo(() =>
-    [...raw].map((d) => ({
-      ...d,
-      displayName: d.name.length > 18 ? d.name.slice(0, 16) + "…" : d.name,
-    })),
-    [raw]
-  );
-  const totalPages = Math.ceil(allSorted.length / CHART_PAGE);
-  const pageData = useMemo(
-    () => allSorted.slice(page * CHART_PAGE, (page + 1) * CHART_PAGE),
-    [allSorted, page]
-  );
-
-  return (
-    <>
-      <div className="chart-sort-btns">
-        <button className={`chart-sort-btn ${view === "day" ? "active" : ""}`} onClick={() => { setView("day"); setPage(0); }}>Por día</button>
-        <button className={`chart-sort-btn ${view === "month" ? "active" : ""}`} onClick={() => { setView("month"); setPage(0); }}>Por mes</button>
-      </div>
-      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "4px 0 0" }}>
-        {view === "day" ? "Mostrando datos del día seleccionado" : "Mostrando datos de todas las fechas del dataset"}
-      </p>
-      {totalPages > 1 && (
-        <div className="chart-pager">
-          <button className="pager-btn" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>‹</button>
-          <span>{page + 1} / {totalPages}</span>
-          <button className="pager-btn" disabled={page === totalPages - 1} onClick={() => setPage((p) => p + 1)}>›</button>
-        </div>
-      )}
-      <ResponsiveContainer width="100%" height={CHART_H}>
-        <BarChart data={pageData} layout="vertical" margin={{ top: 4, right: 36, left: 4, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
-          <XAxis type="number" domain={[0, 10]} tick={{ fontSize: 11 }} />
-          <YAxis type="category" dataKey="displayName" width={140} tick={{ fontSize: 11 }} />
-          <Tooltip
-            {...getTooltipStyle()}
-            content={({ payload }) => {
-              if (!payload?.length) return null;
-              const d = payload[0].payload;
-              return (
-                <div style={getTooltipStyle().contentStyle}>
-                  <p style={{ marginBottom: 4, fontWeight: 600 }}>{d.name}</p>
-                  {d.descripcion && <p style={{ color: "#aaa", fontSize: 11, marginBottom: 4 }}>{d.descripcion}</p>}
-                  <p>Score promedio: {d.avgScore}</p>
-                </div>
-              );
-            }}
+          <Legend
+            verticalAlign="bottom"
+            height={48}
+            iconType="circle"
+            formatter={(_, entry) => entry.payload.sku}
+            wrapperStyle={{ fontSize: 11, color: "var(--text-muted)" }}
           />
-          <Bar dataKey="avgScore" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelectSku?.(d.sku || d.name)} cursor="pointer">
-            {pageData.map((entry, i) => (
-              <Cell key={i} fill={scoreColor(entry.avgScore)} />
-            ))}
-            <LabelList dataKey="avgScore" position="insideRight" style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }} />
-          </Bar>
-        </BarChart>
+        </PieChart>
       </ResponsiveContainer>
-    </>
+    </div>
   );
 });
 
-export default function Charts({ clients, allDatesClients, infractionChart, allDatesInfractionChart, monthlySummary, skuScoreChart, allDatesSkuScoreChart, skuDeviationChart, rotChart, onSelect, onSelectSku }) {
+const CHART_LAYOUT_KEY = "pvp-dashboard:chart-layout";
+const GRID_COLS = 12;
+const ROW_HEIGHT = 30;
+const GRID_MARGIN = 16;
+
+const DEFAULT_CHART_LAYOUT = {
+  clientScore: { x: 0, y: 0, w: 6, h: 11 },
+  topRotos: { x: 6, y: 0, w: 6, h: 11 },
+  infractionAccounts: { x: 0, y: 11, w: 6, h: 12 },
+  rotChart: { x: 0, y: 23, w: 12, h: 6 },
+};
+
+function loadChartLayout() {
+  try {
+    const raw = localStorage.getItem(CHART_LAYOUT_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function layoutsEqual(a, b) {
+  if (a.length !== b.length) return false;
+  const byId = new Map(b.map((l) => [l.i, l]));
+  return a.every((l) => {
+    const o = byId.get(l.i);
+    return o && o.x === l.x && o.y === l.y && o.w === l.w && o.h === l.h;
+  });
+}
+
+export default function Charts({ clients, allDatesClients, infractionChart, allDatesInfractionChart, monthlySummary, skuDeviationChart, rotChart, onSelect, onSelectSku }) {
+  const [savedLayout, setSavedLayout] = useState(loadChartLayout);
+
   function handleSelect(data, pctThreshold = null) {
     if (!data || !onSelect) return;
     const name = data.fullName || data.displayName || data.name;
     const all = [...clients, ...(allDatesClients || [])];
     const client = all.find((c) => c.name === name || name.includes(c.name) || c.name.includes(name)) ?? { name };
     onSelect(client, pctThreshold);
+  }
+
+  const chartDefs = [
+    {
+      id: "clientScore",
+      title: "Score promedio por cliente",
+      content: <BarPanel data={clients} allDatesData={allDatesClients ?? []} onSelect={handleSelect} />,
+    },
+    skuDeviationChart && skuDeviationChart.length > 0 && {
+      id: "topRotos",
+      title: "Top 5 productos más rotos",
+      content: <TopRotosPie data={skuDeviationChart} onSelectSku={onSelectSku} />,
+    },
+    infractionChart && infractionChart.length > 0 && {
+      id: "infractionAccounts",
+      title: "Top 15 cuentas en infracción (≥15%)",
+      content: <DeviationPanel data={infractionChart} allDatesData={allDatesInfractionChart} onSelect={handleSelect} />,
+    },
+    rotChart && rotChart.length > 0 && {
+      id: "rotChart",
+      title: "Score e infracciones por rotación",
+      content: <RotChart data={rotChart} />,
+    },
+  ].filter(Boolean);
+
+  const layout = useMemo(() => {
+    const byId = new Map(savedLayout.map((l) => [l.i, l]));
+    let nextY = 0;
+    return chartDefs.map((def) => {
+      const stored = byId.get(def.id);
+      if (stored) return { minW: 3, minH: 4, ...stored, i: def.id };
+      const fallback = DEFAULT_CHART_LAYOUT[def.id] ?? { x: 0, y: nextY, w: 6, h: 11 };
+      nextY = fallback.y + fallback.h;
+      return { i: def.id, minW: 3, minH: 4, ...fallback };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedLayout, clients, skuDeviationChart, infractionChart, rotChart]);
+
+  function handleLayoutChange(newLayout) {
+    setSavedLayout((prev) => {
+      if (layoutsEqual(prev, newLayout)) return prev;
+      try {
+        localStorage.setItem(CHART_LAYOUT_KEY, JSON.stringify(newLayout));
+      } catch {
+        // ignore write failures (e.g. storage disabled)
+      }
+      return newLayout;
+    });
   }
 
   if (!clients || clients.length === 0) {
@@ -416,33 +431,25 @@ export default function Charts({ clients, allDatesClients, infractionChart, allD
         <SummaryStats monthlySummary={monthlySummary} />
       </CollapsibleChart>
 
-      <CollapsibleChart title="Score promedio por cliente" defaultOpen={true}>
-        <BarPanel data={clients} allDatesData={allDatesClients ?? []} onSelect={handleSelect} />
-      </CollapsibleChart>
-
-      {(skuScoreChart?.length > 0 || allDatesSkuScoreChart?.length > 0) && (
-        <CollapsibleChart title="Score promedio por SKU" defaultOpen={true}>
-          <SkuScorePanel data={skuScoreChart ?? []} allDatesData={allDatesSkuScoreChart ?? []} onSelectSku={onSelectSku} />
-        </CollapsibleChart>
-      )}
-
-      {infractionChart && infractionChart.length > 0 && (
-        <CollapsibleChart title="Cuentas en infracción (≥15%)" defaultOpen={true}>
-          <DeviationPanel data={infractionChart} allDatesData={allDatesInfractionChart} onSelect={handleSelect} />
-        </CollapsibleChart>
-      )}
-
-      {skuDeviationChart && skuDeviationChart.length > 0 && (
-        <CollapsibleChart title="SKUs con más desvíos (≥10%)" defaultOpen={true}>
-          <SkuDeviationPanel data={skuDeviationChart} onSelectSku={onSelectSku} />
-        </CollapsibleChart>
-      )}
-
-      {rotChart && rotChart.length > 0 && (
-        <CollapsibleChart title="Score e infracciones por rotación" defaultOpen={true}>
-          <RotChart data={rotChart} />
-        </CollapsibleChart>
-      )}
+      <Grid
+        className="charts-grid"
+        layout={layout}
+        cols={GRID_COLS}
+        rowHeight={ROW_HEIGHT}
+        margin={[GRID_MARGIN, GRID_MARGIN]}
+        containerPadding={[0, 0]}
+        draggableHandle=".drag-handle"
+        onLayoutChange={handleLayoutChange}
+        useCSSTransforms
+      >
+        {chartDefs.map((def) => (
+          <div key={def.id}>
+            <CollapsibleChart title={def.title} draggable>
+              {def.content}
+            </CollapsibleChart>
+          </div>
+        ))}
+      </Grid>
     </div>
   );
 }
