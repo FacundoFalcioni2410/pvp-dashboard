@@ -9,16 +9,22 @@ export default function FileUpload({ onData }) {
   const inputRef = useRef();
 
   async function upload(file) {
-    if (!file) return;
+    if (!file || loading) return;
     setLoading(true);
     setError(null);
     setFileName(file.name);
     const form = new FormData();
     form.append("file", file);
+    const t0 = performance.now();
+    console.log(`[upload] "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) — inicio`);
     try {
       const { data } = await axios.post("/upload", form);
+      const seconds = ((performance.now() - t0) / 1000).toFixed(2);
+      console.log(`[upload] "${file.name}" — listo en ${seconds}s`);
       onData(data);
     } catch (e) {
+      const seconds = ((performance.now() - t0) / 1000).toFixed(2);
+      console.log(`[upload] "${file.name}" — error a los ${seconds}s`);
       setError(e.response?.data?.detail ?? "Error al subir el archivo");
     } finally {
       setLoading(false);
@@ -28,6 +34,7 @@ export default function FileUpload({ onData }) {
   function onDrop(e) {
     e.preventDefault();
     setDragging(false);
+    if (loading) return;
     const file = e.dataTransfer.files[0];
     upload(file);
   }
@@ -35,10 +42,10 @@ export default function FileUpload({ onData }) {
   return (
     <div
       className={`upload-zone ${dragging ? "dragging" : ""}`}
-      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragOver={(e) => { e.preventDefault(); if (!loading) setDragging(true); }}
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
-      onClick={() => inputRef.current.click()}
+      onClick={() => !loading && inputRef.current.click()}
     >
       <input
         ref={inputRef}

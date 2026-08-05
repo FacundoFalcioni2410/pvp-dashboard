@@ -1,5 +1,7 @@
 import io
 import json
+import logging
+import time
 from collections import defaultdict
 
 import pandas as pd
@@ -18,6 +20,14 @@ from database import (
 )
 from filters import apply_global_filters, build_filter_options, build_response
 from scoring import compute_score, enrich_rows
+
+logger = logging.getLogger("upload_timing")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(asctime)s [%(name)s] %(message)s", "%H:%M:%S"))
+    logger.addHandler(_handler)
+    logger.propagate = False
 
 router = APIRouter()
 
@@ -99,75 +109,84 @@ def get_data(
 
 @router.post("/upload")
 async def upload_excel(file: UploadFile = File(...)):
+    t_start = time.perf_counter()
+    logger.info("upload start: %s", file.filename)
+
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Only .xlsx / .xls files are accepted")
 
     contents = await file.read()
     try:
-        xl = pd.ExcelFile(io.BytesIO(contents))
+        # calamine (Rust) reads raw cell data directly and stays fast even on sheets
+        # with a bloated used-range (old formatting on empty cells past the real data),
+        # where openpyxl crawls cell-by-cell regardless of read_only mode.
+        xl = pd.ExcelFile(io.BytesIO(contents), engine="calamine")
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Could not parse Excel file: {e}")
+
+    t_parsed = time.perf_counter()
+    logger.info("upload [%s]: excel parsed in %.2fs", file.filename, t_parsed - t_start)
 
     def _has_pct_col(columns):
         cols_lower = [str(c).strip().lower() for c in columns]
         return PCT_DIF_COL.lower() in cols_lower or any(PCT_DIF_COL.lower() in c for c in cols_lower)
 
-    df = None
-    for sheet in xl.sheet_names:
-        for header_row in (0, 1):
-            candidate = xl.parse(sheet, header=header_row)
-            candidate.columns = [str(c).strip() for c in candidate.columns]
-            if _has_pct_col(candidate.columns):
-                df = candidate
-                break
-        if df is not None:
-            break
-
-    if df is None:
-        raise HTTPException(
-            status_code=422,
-            detail=f"No sheet found containing column '{PCT_DIF_COL}'. Sheets: {xl.sheet_names}",
-        )
-
-    if PCT_DIF_COL not in df.columns:
-        match = [c for c in df.columns if c.lower() == PCT_DIF_COL.lower()]
-        if match:
-            df.rename(columns={match[0]: PCT_DIF_COL}, inplace=True)
-
-    df["score"] = df[PCT_DIF_COL].apply(compute_score)
-    for col in df.select_dtypes(include=["datetime64[ns]", "datetime64[ns, UTC]"]).columns:
-        df[col] = df[col].dt.strftime("%Y-%m-%d")
-    df = df.astype(str).replace("nan", None)
-
     base_name = file.filename.rsplit(".", 1)[0] if "." in file.filename else file.filename
     dataset_id = create_dataset_in_catalog(base_name, file.filename, 0)
+
+    logger.info("upload [%s]: scanning %d sheet(s): %s", file.filename, len(xl.sheet_names), xl.sheet_names)
 
     valid_sheets = []
     total_rows = 0
     first_sheet_df = None
 
     for sheet in xl.sheet_names:
+        t_sheet = time.perf_counter()
+        matched = False
         for header_row in (0, 1):
             try:
+                # Cheap probe: read only the header row to check for the target column
+                # before paying for a full-sheet parse of an irrelevant sheet.
+                probe = xl.parse(sheet, header=header_row, nrows=0)
+                probe.columns = [str(c).strip() for c in probe.columns]
+                if not _has_pct_col(probe.columns):
+                    continue
+
                 sheet_df = xl.parse(sheet, header=header_row)
                 sheet_df.columns = [str(c).strip() for c in sheet_df.columns]
-                if _has_pct_col(sheet_df.columns):
-                    if PCT_DIF_COL not in sheet_df.columns:
-                        match = [c for c in sheet_df.columns if c.lower() == PCT_DIF_COL.lower()]
-                        if match:
-                            sheet_df.rename(columns={match[0]: PCT_DIF_COL}, inplace=True)
-                    sheet_df["score"] = sheet_df[PCT_DIF_COL].apply(compute_score)
-                    for col in sheet_df.select_dtypes(include=["datetime64[ns]", "datetime64[ns, UTC]"]).columns:
-                        sheet_df[col] = sheet_df[col].dt.strftime("%Y-%m-%d")
-                    sheet_df = sheet_df.astype(str).replace("nan", None)
-                    if first_sheet_df is None:
-                        first_sheet_df = sheet_df
-                    populate_dataset_db(dataset_id, sheet_df, sheet)
-                    valid_sheets.append(sheet)
-                    total_rows += len(sheet_df)
-                    break
+                if PCT_DIF_COL not in sheet_df.columns:
+                    match = [c for c in sheet_df.columns if c.lower() == PCT_DIF_COL.lower()]
+                    if match:
+                        sheet_df.rename(columns={match[0]: PCT_DIF_COL}, inplace=True)
+                sheet_df["score"] = sheet_df[PCT_DIF_COL].apply(compute_score)
+                for col in sheet_df.select_dtypes(include=["datetime", "datetimetz"]).columns:
+                    sheet_df[col] = sheet_df[col].dt.strftime("%Y-%m-%d")
+                sheet_df = sheet_df.astype(str).replace("nan", None)
+                if first_sheet_df is None:
+                    first_sheet_df = sheet_df
+                populate_dataset_db(dataset_id, sheet_df, sheet)
+                valid_sheets.append(sheet)
+                total_rows += len(sheet_df)
+                matched = True
+                break
             except Exception:
                 continue
+        logger.info(
+            "upload [%s]: sheet '%s' %s in %.2fs",
+            file.filename, sheet, "matched" if matched else "skipped", time.perf_counter() - t_sheet,
+        )
+
+    if not valid_sheets:
+        raise HTTPException(
+            status_code=422,
+            detail=f"No sheet found containing column '{PCT_DIF_COL}'. Sheets: {xl.sheet_names}",
+        )
+
+    t_sheets_populated = time.perf_counter()
+    logger.info(
+        "upload [%s]: %d sheets / %d rows parsed+populated in %.2fs",
+        file.filename, len(valid_sheets), total_rows, t_sheets_populated - t_parsed,
+    )
 
     conn = get_catalog_conn()
     try:
@@ -182,11 +201,23 @@ async def upload_excel(file: UploadFile = File(...)):
     if first_sheet_df is not None:
         populate_dataset_db(dataset_id, first_sheet_df, None)
 
+    t_first_sheet_populated = time.perf_counter()
+    logger.info(
+        "upload [%s]: undated rows populated in %.2fs",
+        file.filename, t_first_sheet_populated - t_sheets_populated,
+    )
+
     datasets = list_datasets_from_catalog()
     dates = query_dataset_dates(dataset_id)
     latest_date = dates[0] if dates else None
     rows = query_dataset_rows(dataset_id, latest_date)
     all_rows = query_dataset_rows(dataset_id, None)
+
+    t_queried = time.perf_counter()
+    logger.info(
+        "upload [%s]: rows queried (%d latest / %d all) in %.2fs",
+        file.filename, len(rows), len(all_rows), t_queried - t_first_sheet_populated,
+    )
 
     body = json.loads(build_response(rows, all_rows))
     body["filterOptions"] = build_filter_options(rows)
@@ -195,6 +226,12 @@ async def upload_excel(file: UploadFile = File(...)):
     body["datasets"] = datasets
     body["activeDatasetId"] = dataset_id
     body["sheets"] = valid_sheets
+
+    t_end = time.perf_counter()
+    logger.info(
+        "upload [%s]: charts built in %.2fs — total %.2fs",
+        file.filename, t_end - t_queried, t_end - t_start,
+    )
 
     return Response(content=json.dumps(body, ensure_ascii=False), media_type="application/json")
 
