@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-render */
 import { useState, useEffect, useMemo, useRef, useDeferredValue } from "react";
-import { scoreClass, FIELDS } from "../utils/score";
+import { scoreColor, maxScoreFor, buildScoreFilters, FIELDS } from "../utils/score";
+import { useDashboard } from "../context/DashboardContext";
 
 const PAGE_SIZE = 25;
 
@@ -37,14 +38,6 @@ function ProductDropdown({ skus, onSelect }) {
     </div>
   );
 }
-
-const SCORE_FILTERS = [
-  { label: "Todos", value: "all" },
-  { label: "Crítico", value: "red", min: 1, max: 3 },
-  { label: "Regular", value: "orange", min: 4, max: 5 },
-  { label: "Bueno", value: "yellow", min: 6, max: 7 },
-  { label: "Óptimo", value: "green", min: 8, max: 10 },
-];
 
 const TYPE_OPTIONS = [
   { label: "Seller", value: "SELLER" },
@@ -143,6 +136,9 @@ function UserDropdown({ rows, selected, onChange }) {
 }
 
 export default function ClientList({ clients, rows, onSelect, selectedName, onSelectProduct }) {
+  const { scoreConfig } = useDashboard();
+  const maxScore = maxScoreFor(scoreConfig?.bands);
+  const SCORE_FILTERS = useMemo(() => buildScoreFilters(maxScore), [maxScore]);
   const [search] = useState("");
   const [mlUser, setMlUser] = useState("");
   const [scoreFilter, setScoreFilter] = useState("all");
@@ -201,7 +197,7 @@ export default function ClientList({ clients, rows, onSelect, selectedName, onSe
       return true;
     });
     return applySort(filtered, deferredSortBy);
-  }, [clients, clientSkus, deferredSearch, deferredMlUser, deferredScoreFilter, deferredTypeFilter, deferredSortBy]);
+  }, [clients, clientSkus, deferredSearch, deferredMlUser, deferredScoreFilter, deferredTypeFilter, deferredSortBy, SCORE_FILTERS]);
 
   const visible = (page + 1) * PAGE_SIZE;
   const shown = sorted.slice(0, visible);
@@ -273,7 +269,7 @@ export default function ClientList({ clients, rows, onSelect, selectedName, onSe
                       </span>
                     )}
                   </div>
-                  <span className={`score-badge ${scoreClass(c.avgScore)}`}>{c.avgScore}</span>
+                  <span className="score-badge" style={{ background: scoreColor(c.avgScore, maxScore) }}>{c.avgScore}</span>
                 </li>
               );
             })}

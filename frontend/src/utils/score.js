@@ -14,25 +14,35 @@ export const FIELDS = {
   ROT: "ROT",
 };
 
-export function scoreColor(score) {
-  if (score >= 8) return "#22c55e";
-  if (score >= 6) return "#eab308";
-  if (score >= 4) return "#f97316";
-  return "#ef4444";
+// Number of distinct score levels for a given band configuration:
+// 1 compliant level + 1 level per band + 1 catch-all level beyond the last band.
+export function maxScoreFor(bands) {
+  return (bands?.length ?? 6) + 2;
 }
 
-export function scoreClass(score) {
-  if (score >= 8) return "score-green";
-  if (score >= 6) return "score-yellow";
-  if (score >= 4) return "score-orange";
-  return "score-red";
+// Gradient from red (lowest score) to green (highest score), scaled to
+// however many levels are currently configured.
+export function scoreColor(score, maxScore = 8) {
+  const s = Number(score) || 0;
+  const max = Math.max(2, Number(maxScore) || 8);
+  const t = Math.max(0, Math.min(1, (s - 1) / (max - 1)));
+  const hue = t * 120;
+  return `hsl(${hue}, 72%, 42%)`;
 }
 
-export function scoreLabel(score) {
-  if (score >= 8) return "Óptimo (0-5%)";
-  if (score >= 6) return "Bueno (5-15%)";
-  if (score >= 4) return "Regular (15-85%)";
-  return "Crítico (>85%)";
+// Quartile-style buckets over whatever score range is currently configured
+// (1..maxScore), used for the "Crítico/Regular/Bueno/Óptimo" filter buttons.
+export function buildScoreFilters(maxScore) {
+  const labels = ["Crítico", "Regular", "Bueno", "Óptimo"];
+  const colorKeys = ["red", "orange", "yellow", "green"];
+  const n = Math.min(4, Math.max(1, maxScore));
+  const filters = [{ label: "Todos", value: "all" }];
+  for (let i = 0; i < n; i++) {
+    const min = Math.floor((i * maxScore) / n) + 1;
+    const max = i === n - 1 ? maxScore : Math.floor(((i + 1) * maxScore) / n);
+    filters.push({ label: labels[i] ?? `Nivel ${i + 1}`, value: colorKeys[i] ?? `lvl${i}`, min, max });
+  }
+  return filters;
 }
 
 export function fmtPct(row, field) {

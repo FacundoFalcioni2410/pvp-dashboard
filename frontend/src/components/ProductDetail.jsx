@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { FIELDS, scoreColor, fmt, fmtPct } from "../utils/score";
+import { FIELDS, scoreColor, maxScoreFor, fmt, fmtPct } from "../utils/score";
 import { useDashboard } from "../context/DashboardContext";
 import CompareView from "./CompareView";
 import { getTooltipStyle } from "../utils/theme";
@@ -95,6 +95,7 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
   const { widths, onMouseDown } = useColumnResize();
   const { activeDatasetId, thresholdCount, scoreConfig } = useDashboard();
   const defaultThreshold = scoreConfig?.defaultThreshold ?? 15;
+  const maxScore = maxScoreFor(scoreConfig?.bands);
 
   const columns = useMemo(
     () => (thresholdCount > 0 ? COLUMNS : COLUMNS.filter((c) => c.key !== "_allowed_pct")),
@@ -258,7 +259,7 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
           <span className="detail-count">{rows.length} registros</span>
           <span
             className="score-badge"
-            style={{ background: scoreColor(avgScore) }}
+            style={{ background: scoreColor(avgScore, maxScore) }}
             title="Score promedio"
           >
             {avgScore}
@@ -302,7 +303,7 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
                 <BarChart data={scoreChartData} margin={{ top: 4, right: 8, left: -20, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
                   <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                  <YAxis domain={[0, 10]} tick={{ fontSize: 10 }} />
+                  <YAxis domain={[0, maxScore]} tick={{ fontSize: 10 }} />
                   <Tooltip
                     {...getTooltipStyle()}
                     cursor={{ fill: "rgba(255,255,255,0.04)" }}
@@ -310,7 +311,7 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
                   />
                   <Bar dataKey="score" radius={[3, 3, 0, 0]} isAnimationActive={false}>
                     {scoreChartData.map((entry, i) => (
-                      <Cell key={i} fill={scoreColor(entry.score)} />
+                      <Cell key={i} fill={scoreColor(entry.score, maxScore)} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -378,7 +379,7 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
                       </td>
                     )}
                     <td>
-                      <span className="score-badge" style={{ background: scoreColor(r.score) }}>
+                      <span className="score-badge" style={{ background: scoreColor(r.score, maxScore) }}>
                         {r.score ?? "—"}
                       </span>
                     </td>

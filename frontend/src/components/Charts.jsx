@@ -6,8 +6,9 @@ import {
 import GridLayout, { WidthProvider } from "react-grid-layout/legacy";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
-import { scoreColor } from "../utils/score";
+import { scoreColor, maxScoreFor } from "../utils/score";
 import { getTooltipStyle } from "../utils/theme";
+import { useDashboard } from "../context/DashboardContext";
 
 const Grid = WidthProvider(GridLayout);
 
@@ -100,7 +101,7 @@ const StackedBarChart = memo(function StackedBarChart({ rows }) {
   );
 });
 
-const BarPanel = memo(function BarPanel({ data, allDatesData, onSelect }) {
+const BarPanel = memo(function BarPanel({ data, allDatesData, onSelect, maxScore }) {
   const [view, setView] = useState("day");
   const [page, setPage] = useState(0);
 
@@ -139,7 +140,7 @@ const BarPanel = memo(function BarPanel({ data, allDatesData, onSelect }) {
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={pageData} layout="vertical" margin={{ top: 4, right: 36, left: 4, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
-            <XAxis type="number" domain={[0, 10]} tick={{ fontSize: 11 }} />
+            <XAxis type="number" domain={[0, maxScore]} tick={{ fontSize: 11 }} />
             <YAxis type="category" dataKey="displayName" width={140} tick={{ fontSize: 11 }} />
             <Tooltip
               {...getTooltipStyle()}
@@ -147,7 +148,7 @@ const BarPanel = memo(function BarPanel({ data, allDatesData, onSelect }) {
             />
             <Bar dataKey="avgScore" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelect?.(d)}>
               {pageData.map((entry, i) => (
-                <Cell key={i} fill={scoreColor(entry.avgScore)} />
+                <Cell key={i} fill={scoreColor(entry.avgScore, maxScore)} />
               ))}
               <LabelList dataKey="avgScore" position="insideRight" style={{ fill: "#fff", fontSize: 11, fontWeight: 600 }} />
             </Bar>
@@ -223,7 +224,7 @@ const DeviationPanel = memo(function DeviationPanel({ data, allDatesData, onSele
 
 
 
-const RotChart = memo(function RotChart({ data }) {
+const RotChart = memo(function RotChart({ data, maxScore }) {
   const [metric, setMetric] = useState("avgScore");
   const byScore = metric === "avgScore";
   const maxVal = useMemo(() => Math.max(...data.map((d) => d[metric]), 1), [data, metric]);
@@ -238,7 +239,7 @@ const RotChart = memo(function RotChart({ data }) {
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} layout="vertical" margin={{ top: 4, right: 48, left: 16, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
-            <XAxis type="number" domain={[0, byScore ? 10 : maxVal]} tick={{ fontSize: 11 }}
+            <XAxis type="number" domain={[0, byScore ? maxScore : maxVal]} tick={{ fontSize: 11 }}
               tickFormatter={byScore ? undefined : (v) => `${v}%`} />
             <YAxis type="category" dataKey="name" width={36} tick={{ fontSize: 13, fontWeight: 600 }} />
             <Tooltip
@@ -258,7 +259,7 @@ const RotChart = memo(function RotChart({ data }) {
             />
             <Bar dataKey={metric} radius={[0, 4, 4, 0]} isAnimationActive={false}>
               {data.map((entry, i) => (
-                <Cell key={i} fill={byScore ? scoreColor(entry.avgScore) : (entry.pctInfraccion >= 50 ? "#ef4444" : entry.pctInfraccion >= 25 ? "#f97316" : "#eab308")} />
+                <Cell key={i} fill={byScore ? scoreColor(entry.avgScore, maxScore) : (entry.pctInfraccion >= 50 ? "#ef4444" : entry.pctInfraccion >= 25 ? "#f97316" : "#eab308")} />
               ))}
               <LabelList dataKey={metric} position="insideRight"
                 style={{ fill: "#fff", fontSize: 12, fontWeight: 700 }}
@@ -359,6 +360,8 @@ function layoutsEqual(a, b) {
 }
 
 export default function Charts({ clients, allDatesClients, infractionChart, allDatesInfractionChart, deviationThreshold, monthlySummary, skuDeviationChart, rotChart, onSelect, onSelectSku }) {
+  const { scoreConfig } = useDashboard();
+  const maxScore = maxScoreFor(scoreConfig?.bands);
   const [savedLayout, setSavedLayout] = useState(loadChartLayout);
 
   function handleSelect(data, pctThreshold = null) {
@@ -373,7 +376,7 @@ export default function Charts({ clients, allDatesClients, infractionChart, allD
     {
       id: "clientScore",
       title: "Score promedio por cliente",
-      content: <BarPanel data={clients} allDatesData={allDatesClients ?? []} onSelect={handleSelect} />,
+      content: <BarPanel data={clients} allDatesData={allDatesClients ?? []} onSelect={handleSelect} maxScore={maxScore} />,
     },
     skuDeviationChart && skuDeviationChart.length > 0 && {
       id: "topRotos",
@@ -388,7 +391,7 @@ export default function Charts({ clients, allDatesClients, infractionChart, allD
     rotChart && rotChart.length > 0 && {
       id: "rotChart",
       title: "Score e infracciones por rotación",
-      content: <RotChart data={rotChart} />,
+      content: <RotChart data={rotChart} maxScore={maxScore} />,
     },
   ].filter(Boolean);
 

@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useDashboard } from "../context/DashboardContext";
-import { scoreClass } from "../utils/score";
+import { scoreColor } from "../utils/score";
+
+const MIN_BANDS = 1;
+const MAX_BANDS = 12;
 
 export default function ScoreConfigPanel({ onClose }) {
   const { scoreConfig, setScoreConfig } = useDashboard();
@@ -10,18 +13,52 @@ export default function ScoreConfigPanel({ onClose }) {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
-  function updateBand(i, raw) {
-    if (raw === "") return;
-    const min = i === 0 ? 1 : (Number(bands[i - 1]) || 0) + 1;
-    const value = Math.max(Number(raw), min);
-    const next = [...bands];
-    next[i] = value;
-    // Cascade: if subsequent bands are now too small, push them up
-    for (let j = i + 1; j < next.length; j++) {
-      if (Number(next[j]) <= Number(next[j - 1])) next[j] = Number(next[j - 1]) + 1;
-      else break;
-    }
-    setBands(next);
+  const topScore = bands.length + 2;
+  // Bands are stored as excess-over-permitido (so per-SKU custom thresholds reuse
+  // the same tier structure), but shown/edited as absolute % for clarity.
+  const parsedDefaultThreshold = Number(defaultThreshold) || 0;
+  const absBands = bands.map((b) => parsedDefaultThreshold + (Number(b) || 0));
+
+  // While a field is focused we let the user type freely (even values that are
+  // momentarily below the min, e.g. typing "3" before "30") and only clamp/cascade
+  // on blur — clamping on every keystroke made it impossible to type past the min.
+  const [editing, setEditing] = useState(null); // { idx, value } | null
+
+  function handleBandChange(i, raw) {
+    setEditing({ idx: i, value: raw });
+  }
+
+  function commitBand(i) {
+    setEditing((current) => {
+      if (!current || current.idx !== i) return null;
+      const raw = current.value;
+      if (raw !== "") {
+        const min = i === 0 ? parsedDefaultThreshold + 1 : absBands[i - 1] + 1;
+        const value = Math.max(Number(raw) || min, min);
+        const nextAbs = [...absBands];
+        nextAbs[i] = value;
+        // Cascade: if subsequent bands are now too small, push them up
+        for (let j = i + 1; j < nextAbs.length; j++) {
+          if (nextAbs[j] <= nextAbs[j - 1]) nextAbs[j] = nextAbs[j - 1] + 1;
+          else break;
+        }
+        setBands(nextAbs.map((v) => v - parsedDefaultThreshold));
+      }
+      return null;
+    });
+  }
+
+  function addLevel() {
+    if (bands.length >= MAX_BANDS) return;
+    setEditing(null);
+    const lastAbs = absBands.length > 0 ? absBands[absBands.length - 1] : parsedDefaultThreshold;
+    setBands([...bands, lastAbs + 5 - parsedDefaultThreshold]);
+  }
+
+  function removeLevel(i) {
+    if (bands.length <= MIN_BANDS) return;
+    setEditing(null);
+    setBands(bands.filter((_, j) => j !== i));
   }
 
   async function save() {
@@ -32,7 +69,7 @@ export default function ScoreConfigPanel({ onClose }) {
     }
     for (let i = 1; i < parsed.length; i++) {
       if (parsed[i] <= parsed[i - 1]) {
-        setError(`El umbral del score ${7 - i} (${parsed[i]}%) debe ser mayor al del score ${8 - i} (${parsed[i - 1]}%)`);
+        setError(`El nivel ${i + 1} debe tener un % mayor al del nivel ${i}`);
         return;
       }
     }
@@ -63,20 +100,19 @@ export default function ScoreConfigPanel({ onClose }) {
     }
   }
 
-  // Each row shows its full range; only the upper bound (bands[i]) is editable.
-  // The lower bound is derived from the previous band (or 0 for score 7).
+  // Each row shows its full absolute % range; only the upper bound is editable
+  // (internally stored as excess-over-permitido so per-SKU thresholds reuse it).
   const rows = [
-    { score: 8, editable: false, label: "< permitido" },
-    { score: 7, editable: true,  idx: 0, prefix: "< ",           band: bands[0], min: 1 },
-    ...bands.slice(1).map((b, i) => ({
-      score: 6 - i,
+    { score: topScore, editable: false, label: `< ${parsedDefaultThreshold}% (permitido)` },
+    ...bands.map((b, i) => ({
+      score: topScore - 1 - i,
       editable: true,
-      idx: i + 1,
-      prefix: `≥ ${bands[i]}% – < `,
-      band: b,
-      min: (Number(bands[i]) || 0) + 1,
+      idx: i,
+      prefix: i === 0 ? `≥ ${parsedDefaultThreshold}% – < ` : `≥ ${absBands[i - 1]}% – < `,
+      band: absBands[i],
+      min: i === 0 ? parsedDefaultThreshold + 1 : absBands[i - 1] + 1,
     })),
-    { score: 1, editable: false, label: `≥ ${bands[bands.length - 1]}%` },
+    { score: 1, editable: false, label: `≥ ${absBands[absBands.length - 1]}%` },
   ];
 
   return (
@@ -86,7 +122,10 @@ export default function ScoreConfigPanel({ onClose }) {
           <span className="score-config-title">Configuración de Score</span>
           <button className="close-btn" onClick={onClose}>✕</button>
         </div>
-        <p className="score-config-subtitle">Exceso sobre el % permitido por SKU</p>
+        <p className="score-config-subtitle">
+          % de desvío absoluto. Si un SKU tiene un umbral propio cargado, estos rangos se corren
+          igual cantidad de puntos respecto a su permitido.
+        </p>
 
         <div className="score-config-row score-config-default-threshold">
           <span className="score-config-op">% permitido por defecto (sin umbrales cargados)</span>
@@ -110,7 +149,7 @@ export default function ScoreConfigPanel({ onClose }) {
           </div>
           {rows.map(({ score, label, editable, band, idx, prefix, min }) => (
             <div key={score} className="score-config-row">
-              <span className={`score-badge ${scoreClass(score)}`}>{score}</span>
+              <span className="score-badge" style={{ background: scoreColor(score, topScore) }}>{score}</span>
               {editable ? (
                 <div className="score-config-input-row">
                   <span className="score-config-op">{prefix}</span>
@@ -119,10 +158,21 @@ export default function ScoreConfigPanel({ onClose }) {
                     type="number"
                     min={min}
                     step={1}
-                    value={band}
-                    onChange={(e) => updateBand(idx, e.target.value)}
+                    value={editing?.idx === idx ? editing.value : band}
+                    onChange={(e) => handleBandChange(idx, e.target.value)}
+                    onBlur={() => commitBand(idx)}
+                    onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                   />
                   <span className="score-config-unit">%</span>
+                  <button
+                    type="button"
+                    className="score-config-remove-btn"
+                    onClick={() => removeLevel(idx)}
+                    disabled={bands.length <= MIN_BANDS}
+                    title="Quitar nivel"
+                  >
+                    ✕
+                  </button>
                 </div>
               ) : (
                 <span className="score-config-fixed">{label}</span>
@@ -130,6 +180,15 @@ export default function ScoreConfigPanel({ onClose }) {
             </div>
           ))}
         </div>
+
+        <button
+          type="button"
+          className="score-config-add-btn"
+          onClick={addLevel}
+          disabled={bands.length >= MAX_BANDS}
+        >
+          + Agregar nivel
+        </button>
 
         {error && <p className="score-config-error">{error}</p>}
         {success && <p className="score-config-success">Guardado correctamente</p>}

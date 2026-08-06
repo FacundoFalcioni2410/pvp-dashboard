@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { scoreClass } from "../utils/score";
+import { scoreColor } from "../utils/score";
 import { useDashboard } from "../context/DashboardContext";
 
 export default function ScoreLegend({ onEdit }) {
@@ -17,15 +17,17 @@ export default function ScoreLegend({ onEdit }) {
 
   const bands = scoreConfig?.bands ?? [5, 10, 15, 20, 25, 30];
   const defaultThreshold = scoreConfig?.defaultThreshold ?? 15;
+  const topScore = bands.length + 2;
+  // Bands are stored as excess-over-permitido; show the absolute % equivalent.
+  const absBands = bands.map((b) => defaultThreshold + (Number(b) || 0));
 
   const rows = [
-    { range: `< ${defaultThreshold}% (permitido)`, score: 8 },
-    { range: `< ${bands[0]}%`, score: 7 },
-    ...bands.slice(1).map((b, i) => ({
-      range: `≥ ${bands[i]}% – < ${b}%`,
-      score: 6 - i,
+    { range: `< ${defaultThreshold}% (permitido)`, score: topScore },
+    ...absBands.map((b, i) => ({
+      range: i === 0 ? `≥ ${defaultThreshold}% – < ${b}%` : `≥ ${absBands[i - 1]}% – < ${b}%`,
+      score: topScore - 1 - i,
     })),
-    { range: `≥ ${bands[bands.length - 1]}%`, score: 1 },
+    { range: `≥ ${absBands[absBands.length - 1]}%`, score: 1 },
   ];
 
   return (
@@ -44,16 +46,22 @@ export default function ScoreLegend({ onEdit }) {
         <div className="score-legend-dropdown">
           <p className="legend-title">Referencia de score</p>
           <p className="legend-subtitle">
-            Exceso sobre % permitido — por defecto <strong>{defaultThreshold}%</strong>
+            % de desvío absoluto — permitido por defecto <strong>{defaultThreshold}%</strong>
           </p>
           <div className="legend-rows">
             {rows.map(({ range, score }) => (
               <div key={score} className="legend-row">
                 <span className="legend-range">{range}</span>
                 <div className="legend-bar-wrap">
-                  <div className="legend-bar" style={{ width: `${(score / 8) * 100}%` }} />
+                  <div
+                    className="legend-bar"
+                    style={{
+                      width: `${(score / topScore) * 100}%`,
+                      background: scoreColor(score, topScore),
+                    }}
+                  />
                 </div>
-                <span className={`score-badge ${scoreClass(score)}`}>{score}</span>
+                <span className="score-badge" style={{ background: scoreColor(score, topScore) }}>{score}</span>
               </div>
             ))}
           </div>

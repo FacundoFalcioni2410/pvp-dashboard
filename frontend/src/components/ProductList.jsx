@@ -1,5 +1,6 @@
 import { useMemo, useState, useDeferredValue, useRef, useEffect } from "react";
-import { FIELDS, scoreColor, scoreClass, fmtPct } from "../utils/score";
+import { FIELDS, scoreColor, maxScoreFor, buildScoreFilters, fmtPct } from "../utils/score";
+import { useDashboard } from "../context/DashboardContext";
 
 function CanalBadge({ canal }) {
   const color = canal === "ONLINE" ? "#3b82f6" : canal === "OFFLINE" ? "#a855f7" : "#6b7280";
@@ -39,14 +40,6 @@ function RotBadge({ rot }) {
 }
 
 const PAGE_SIZE = 30;
-
-const SCORE_FILTERS = [
-  { label: "Todos",   value: "all" },
-  { label: "Crítico", value: "red",    min: 1, max: 3 },
-  { label: "Regular", value: "orange", min: 4, max: 5 },
-  { label: "Bueno",   value: "yellow", min: 6, max: 7 },
-  { label: "Óptimo",  value: "green",  min: 8, max: 10 },
-];
 
 const SORT_OPTIONS = [
   { label: "Score ↑", value: "score_asc" },
@@ -97,6 +90,9 @@ function ClientDropdown({ clients, onSelect }) {
 }
 
 export default function ProductList({ rows, onSelect, selectedSku, onSelectClient }) {
+  const { scoreConfig } = useDashboard();
+  const maxScore = maxScoreFor(scoreConfig?.bands);
+  const SCORE_FILTERS = useMemo(() => buildScoreFilters(maxScore), [maxScore]);
   const [query, setQuery] = useState("");
   const [scoreFilter, setScoreFilter] = useState("all");
   const [sortBy, setSortBy] = useState("score_asc");
@@ -151,7 +147,7 @@ export default function ProductList({ rows, onSelect, selectedSku, onSelectClien
       return true;
     });
     return applySort(filtered, sortBy);
-  }, [products, deferred, scoreFilter, sortBy]);
+  }, [products, deferred, scoreFilter, sortBy, SCORE_FILTERS]);
 
   const visible = (page + 1) * PAGE_SIZE;
   const shown = sorted.slice(0, visible);
@@ -211,7 +207,7 @@ export default function ProductList({ rows, onSelect, selectedSku, onSelectClien
                     )}
                   </span>
                 </div>
-                <span className={`score-badge ${scoreClass(p.avgScore)}`}>{p.avgScore}</span>
+                <span className="score-badge" style={{ background: scoreColor(p.avgScore, maxScore) }}>{p.avgScore}</span>
               </li>
             ))}
           </ul>

@@ -74,12 +74,13 @@ def compute_score(pct_diff, threshold: float = DEFAULT_THRESHOLD) -> int:
     if abs(val) <= 1.5:
         val = val * 100
     abs_val = math.floor(abs(val) + 0.5)
-    if abs_val < threshold:
-        return 8
     bands = get_score_config()
+    top = len(bands) + 2
+    if abs_val < threshold:
+        return top
     for i, band in enumerate(bands):
         if abs_val < threshold + band:
-            return 7 - i
+            return top - 1 - i
     return 1
 
 

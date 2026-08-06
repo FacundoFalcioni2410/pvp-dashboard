@@ -4,7 +4,7 @@ import CompareView from "./CompareView";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
 } from "recharts";
-import { scoreColor, fmt, fmtPct, FIELDS } from "../utils/score";
+import { scoreColor, maxScoreFor, fmt, fmtPct, FIELDS } from "../utils/score";
 import DateRangePicker from "./DateRangePicker";
 import { getTooltipStyle } from "../utils/theme";
 import { useDashboard } from "../context/DashboardContext";
@@ -163,6 +163,7 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
   const { rowHeight, onRowResizeMouseDown } = useRowHeight();
   const { activeDatasetId, thresholdCount, scoreConfig } = useDashboard();
   const defaultThreshold = scoreConfig?.defaultThreshold ?? 15;
+  const maxScore = maxScoreFor(scoreConfig?.bands);
 
   const columns = useMemo(
     () => (thresholdCount > 0 ? COLUMNS : COLUMNS.filter((c) => c.key !== "_allowed_pct")),
@@ -496,7 +497,7 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
                 <td>
                   <span
                     className="score-badge"
-                    style={{ background: scoreColor(r.score) }}
+                    style={{ background: scoreColor(r.score, maxScore) }}
                   >
                     {r.score ?? "—"}
                   </span>
