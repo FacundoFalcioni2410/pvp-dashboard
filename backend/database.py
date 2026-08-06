@@ -115,6 +115,16 @@ def upsert_thresholds(entries: list[tuple[str, float]]) -> int:
         conn.close()
 
 
+def delete_thresholds() -> int:
+    conn = get_catalog_conn()
+    try:
+        conn.execute("DELETE FROM thresholds")
+        conn.commit()
+        return conn.execute("SELECT COUNT(*) FROM thresholds").fetchone()[0]
+    finally:
+        conn.close()
+
+
 def get_dataset_conn(dataset_id: int) -> sqlite3.Connection:
     db_path = DATASETS_DIR / f"{dataset_id}.db"
     conn = sqlite3.connect(db_path)

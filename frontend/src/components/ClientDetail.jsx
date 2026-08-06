@@ -12,21 +12,21 @@ import { useDashboard } from "../context/DashboardContext";
 const PAGE_SIZE = 50;
 
 
-function buildMessage(descripcion, pvp, allowedPct) {
-  const pct = allowedPct ?? 15;
+function buildMessage(descripcion, pvp, allowedPct, defaultThreshold) {
+  const pct = allowedPct ?? defaultThreshold;
   const desc = descripcion || "el producto";
   const pvpNum = parseFloat(pvp);
   const calculated = !isNaN(pvpNum) ? Math.round(pvpNum * (1 - pct / 100)) : "—";
   return `Buenas días! Como están? Les envío esta publicación por ${desc}. Les pido si me ayudan subiéndolo a partir de ${calculated}`;
 }
 
-function CopyButton({ row }) {
+function CopyButton({ row, defaultThreshold }) {
   const [copied, setCopied] = useState(false);
   const desc = row[FIELDS.DESCRIPCION];
   const pvp = row[FIELDS.PVP];
   const allowed = row.allowed_pct;
 
-  const msg = buildMessage(desc, pvp, allowed);
+  const msg = buildMessage(desc, pvp, allowed, defaultThreshold);
 
   const handleCopy = async (e) => {
     e.stopPropagation();
@@ -161,7 +161,13 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
   const [allClientRows, setAllClientRows] = useState(null);
   const { widths, onMouseDown } = useColumnResize();
   const { rowHeight, onRowResizeMouseDown } = useRowHeight();
-  const { activeDatasetId } = useDashboard();
+  const { activeDatasetId, thresholdCount, scoreConfig } = useDashboard();
+  const defaultThreshold = scoreConfig?.defaultThreshold ?? 15;
+
+  const columns = useMemo(
+    () => (thresholdCount > 0 ? COLUMNS : COLUMNS.filter((c) => c.key !== "_allowed_pct")),
+    [thresholdCount]
+  );
 
   const rows = useMemo(() => client?.rows ?? [], [client]);
 
@@ -396,7 +402,7 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
         <div className="detail-deviation-filters">
           <span className="deviation-filter-label">Desvío:</span>
           <button className={`deviation-btn ${pctThreshold === null ? "active" : ""}`} onClick={() => onSetFilter(null)}>Todos</button>
-          <button className={`deviation-btn deviation-btn-orange ${pctThreshold === 10 ? "active" : ""}`} onClick={() => onSetFilter(10)}>≥ 10%</button>
+          <button className={`deviation-btn deviation-btn-orange ${pctThreshold === defaultThreshold ? "active" : ""}`} onClick={() => onSetFilter(defaultThreshold)}>≥ {defaultThreshold}%</button>
         </div>
         <div className="sort-indicator">
           {sortCol && (
@@ -415,14 +421,14 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
           style={{ tableLayout: "auto", width: "100%" }}
         >
           <colgroup>
-            {COLUMNS.map((c) => (
+            {columns.map((c) => (
               <col key={c.key} style={{ minWidth: widths[c.key] }} />
             ))}
           </colgroup>
 
           <thead>
             <tr>
-              {COLUMNS.map((c) => (
+              {columns.map((c) => (
                 <th
                   key={c.key}
                   className={c.sortable ? "sortable" : ""}
@@ -443,7 +449,7 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
             </tr>
             <tr className="row-resize-handle-row">
               <td
-                colSpan={COLUMNS.length}
+                colSpan={columns.length}
                 className="row-resize-handle"
                 onMouseDown={onRowResizeMouseDown}
               />
@@ -481,9 +487,11 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
                 <td>{fmt(r[FIELDS.PVP])}</td>
                 <td>{fmtPct(r, FIELDS.PCT_DIF)}</td>
 
-                <td style={{ color: "var(--text-muted)" }}>
-                  {r.allowed_pct != null ? `${r.allowed_pct}%` : "15%"}
-                </td>
+                {thresholdCount > 0 && (
+                  <td style={{ color: "var(--text-muted)" }}>
+                    {r.allowed_pct != null ? `${r.allowed_pct}%` : `${defaultThreshold}%`}
+                  </td>
+                )}
 
                 <td>
                   <span
@@ -495,7 +503,7 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
                 </td>
 
                 <td>
-                  <CopyButton row={r} />
+                  <CopyButton row={r} defaultThreshold={defaultThreshold} />
                 </td>
               </tr>
             ))}

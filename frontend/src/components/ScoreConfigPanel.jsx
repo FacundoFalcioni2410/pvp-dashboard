@@ -5,6 +5,7 @@ import { scoreClass } from "../utils/score";
 export default function ScoreConfigPanel({ onClose }) {
   const { scoreConfig, setScoreConfig } = useDashboard();
   const [bands, setBands] = useState(() => [...(scoreConfig?.bands ?? [5, 10, 15, 20, 25, 30])]);
+  const [defaultThreshold, setDefaultThreshold] = useState(() => scoreConfig?.defaultThreshold ?? 15);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
@@ -35,6 +36,11 @@ export default function ScoreConfigPanel({ onClose }) {
         return;
       }
     }
+    const parsedThreshold = parseFloat(defaultThreshold);
+    if (isNaN(parsedThreshold) || parsedThreshold <= 0) {
+      setError("El % permitido por defecto debe ser un número mayor a 0");
+      return;
+    }
     setSaving(true);
     setError(null);
     setSuccess(false);
@@ -42,7 +48,7 @@ export default function ScoreConfigPanel({ onClose }) {
       const res = await fetch("/score-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bands: parsed }),
+        body: JSON.stringify({ bands: parsed, defaultThreshold: parsedThreshold }),
       });
       const text = await res.text();
       let data = {};
@@ -81,6 +87,21 @@ export default function ScoreConfigPanel({ onClose }) {
           <button className="close-btn" onClick={onClose}>✕</button>
         </div>
         <p className="score-config-subtitle">Exceso sobre el % permitido por SKU</p>
+
+        <div className="score-config-row score-config-default-threshold">
+          <span className="score-config-op">% permitido por defecto (sin umbrales cargados)</span>
+          <div className="score-config-input-row">
+            <input
+              className="score-config-input"
+              type="number"
+              min={0.1}
+              step={0.5}
+              value={defaultThreshold}
+              onChange={(e) => setDefaultThreshold(e.target.value)}
+            />
+            <span className="score-config-unit">%</span>
+          </div>
+        </div>
 
         <div className="score-config-table">
           <div className="score-config-thead">

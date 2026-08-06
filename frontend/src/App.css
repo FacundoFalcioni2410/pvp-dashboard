@@ -1041,24 +1041,24 @@ html, body {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  width: 250px;
+  width: 340px;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px 16px;
+  padding: 18px 20px;
   z-index: 200;
   box-shadow: 0 8px 28px rgba(0,0,0,0.5);
 }
 
 .legend-edit-btn {
   width: 100%;
-  margin-top: 12px;
-  padding: 7px 10px;
+  margin-top: 16px;
+  padding: 10px 12px;
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-size: 12px;
+  font-size: 14px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
@@ -1069,36 +1069,36 @@ html, body {
 }
 
 .legend-title {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted);
-  margin-bottom: 2px;
+  margin-bottom: 3px;
 }
 
 .legend-subtitle {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-muted);
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 
 .legend-rows {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 9px;
 }
 
 .legend-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .legend-range {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-muted);
-  width: 72px;
+  width: 132px;
   text-align: right;
   flex-shrink: 0;
   white-space: nowrap;
@@ -1106,17 +1106,23 @@ html, body {
 
 .legend-bar-wrap {
   flex: 1;
-  height: 6px;
+  height: 9px;
   background: var(--surface2);
-  border-radius: 3px;
+  border-radius: 4px;
   overflow: hidden;
 }
 
 .legend-bar {
   height: 100%;
   background: var(--accent);
-  border-radius: 3px;
+  border-radius: 4px;
   transition: width 0.3s;
+}
+
+.legend-row .score-badge {
+  min-width: 32px;
+  height: 26px;
+  font-size: 13px;
 }
 
 /* ── Load more button ── */
@@ -1642,9 +1648,89 @@ html, body {
   line-height: 1.4;
 }
 
+.threshold-clear-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: var(--surface);
+  color: var(--text-muted, var(--text));
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.threshold-clear-btn:hover {
+  border-color: var(--red);
+  color: var(--red);
+  background: var(--surface2);
+}
+
 .threshold-error {
   font-size: 12px;
   color: var(--red);
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+
+.confirm-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 360px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+}
+
+.confirm-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.confirm-body {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.confirm-danger {
+  background: var(--red);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 7px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.confirm-danger:hover {
+  opacity: 0.85;
 }
 
 /* ── Dataset picker ── */
@@ -2013,6 +2099,20 @@ html, body {
   align-items: center;
   gap: 10px;
   padding: 3px 2px;
+}
+
+.score-config-default-threshold {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 2px;
+  margin-bottom: 4px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.score-config-default-threshold .score-config-op {
+  white-space: normal;
 }
 
 .score-config-input-row {

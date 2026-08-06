@@ -3,6 +3,8 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef } f
 const DashboardContext = createContext(null);
 
 const DEFAULT_SCORE_BANDS = [5, 10, 15, 20, 25, 30];
+const DEFAULT_THRESHOLD = 15;
+const DEFAULT_SCORE_CONFIG = { bands: DEFAULT_SCORE_BANDS, defaultThreshold: DEFAULT_THRESHOLD };
 const DEFAULT_FILTERS = { tipoCliente: [], canal: [], macrofamilia: [], rot: [] };
 
 export function DashboardProvider({ children }) {
@@ -13,7 +15,7 @@ export function DashboardProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [compareDatasetId, setCompareDatasetId] = useState(null);
-  const [scoreConfig, setScoreConfigState] = useState({ bands: DEFAULT_SCORE_BANDS });
+  const [scoreConfig, setScoreConfigState] = useState(DEFAULT_SCORE_CONFIG);
   const [globalFilters, setGlobalFiltersState] = useState(DEFAULT_FILTERS);
   const [filterOptions, setFilterOptions] = useState({ clientes: [], canales: [], macrofamilias: [], rots: [] });
 
@@ -37,8 +39,8 @@ export function DashboardProvider({ children }) {
         if (cancelled) return;
 
         const scoreData = scoreRes.ok
-          ? await scoreRes.json().catch(() => ({ bands: DEFAULT_SCORE_BANDS }))
-          : { bands: DEFAULT_SCORE_BANDS };
+          ? await scoreRes.json().catch(() => DEFAULT_SCORE_CONFIG)
+          : DEFAULT_SCORE_CONFIG;
 
         if (initRes.status === 503 || (!initRes.ok && initRes.status !== 204)) {
           if (attempt < 10) setTimeout(() => loadAll(attempt + 1), 1500);
@@ -90,6 +92,33 @@ export function DashboardProvider({ children }) {
       }));
     } catch (err) {
       console.error("Failed to refresh after score config change:", err);
+    } finally {
+      setLoadingData(false);
+    }
+  }, []);
+
+  const refreshThresholdCount = useCallback(async (total) => {
+    setThresholdCount(total);
+    const id = activeDatasetIdRef.current;
+    if (id == null) return;
+    setLoadingData(true);
+    try {
+      const selectedDate = dashboardDataRef.current?.selectedDate ?? null;
+      const params = buildParams(selectedDate, id, globalFiltersRef.current);
+      const res = await fetch(`/data?${params}`);
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const data = await res.json();
+      if (data.filterOptions) setFilterOptions(data.filterOptions);
+      setDashboardDataState((prev) => ({
+        ...prev,
+        ...data,
+        dates: prev?.dates ?? data.dates ?? [],
+        datasets: prev?.datasets ?? data.datasets ?? [],
+        activeDatasetId: id,
+        sheets: data.sheets ?? prev?.sheets ?? [],
+      }));
+    } catch (err) {
+      console.error("Failed to refresh after threshold change:", err);
     } finally {
       setLoadingData(false);
     }
@@ -247,6 +276,7 @@ export function DashboardProvider({ children }) {
       deleteDataset,
       thresholdCount,
       setThresholdCount,
+      refreshThresholdCount,
       compareDatasetId,
       setCompareDatasetId,
       scoreConfig,

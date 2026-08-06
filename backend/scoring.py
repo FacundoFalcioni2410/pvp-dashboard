@@ -36,6 +36,36 @@ def save_score_config(bands: list[float]) -> None:
         conn.close()
 
 
+_default_threshold_cache: float | None = None
+
+
+def get_default_threshold() -> float:
+    global _default_threshold_cache
+    if _default_threshold_cache is not None:
+        return _default_threshold_cache
+    conn = get_catalog_conn()
+    try:
+        row = conn.execute("SELECT value FROM score_config WHERE key = 'default_threshold'").fetchone()
+        _default_threshold_cache = float(row[0]) if row else DEFAULT_THRESHOLD
+        return _default_threshold_cache
+    finally:
+        conn.close()
+
+
+def save_default_threshold(value: float) -> None:
+    global _default_threshold_cache
+    conn = get_catalog_conn()
+    try:
+        conn.execute(
+            "INSERT OR REPLACE INTO score_config (key, value) VALUES ('default_threshold', ?)",
+            (json.dumps(value),),
+        )
+        conn.commit()
+        _default_threshold_cache = value
+    finally:
+        conn.close()
+
+
 def compute_score(pct_diff, threshold: float = DEFAULT_THRESHOLD) -> int:
     try:
         val = float(pct_diff)
@@ -65,9 +95,10 @@ def normalise_pct(pct_val):
 
 def enrich_rows(rows: list[dict]) -> list[dict]:
     thresholds = get_thresholds()
+    default_threshold = get_default_threshold()
     for row in rows:
         sku = str(row.get(SKU_COL) or row.get(MLA_COL) or "").strip()
-        threshold = thresholds.get(sku, DEFAULT_THRESHOLD)
+        threshold = thresholds.get(sku, default_threshold)
         row["allowed_pct"] = threshold
         row["score"] = compute_score(row.get(PCT_DIF_COL), threshold)
         row["normalized_pct"] = normalise_pct(row.get(PCT_DIF_COL))

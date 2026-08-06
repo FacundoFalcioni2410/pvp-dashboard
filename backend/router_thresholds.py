@@ -3,7 +3,7 @@ import io
 import pandas as pd
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
-from database import upsert_thresholds
+from database import delete_thresholds, upsert_thresholds
 
 router = APIRouter()
 
@@ -69,3 +69,9 @@ async def upload_thresholds(file: UploadFile = File(...)):
 
     total = upsert_thresholds(entries)
     return {"loaded": len(entries), "total": total}
+
+
+@router.delete("/upload-thresholds")
+def clear_thresholds():
+    total = delete_thresholds()
+    return {"total": total}

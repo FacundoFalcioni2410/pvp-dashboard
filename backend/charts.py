@@ -174,19 +174,20 @@ def build_high_deviation_chart(rows: list[dict], threshold: int = 40) -> list:
     return results[:50]
 
 
-def build_sku_deviation_chart(rows: list[dict], threshold: int = 10) -> list:
+def build_sku_deviation_chart(rows: list[dict]) -> list:
     deduped = _deduplicate_by_mla_day(rows)
     smap = defaultdict(lambda: {"count": 0, "total": 0, "pct_sum": 0, "descripcion": "", "rot": ""})
     for row in deduped:
         sku = (row.get(SKU_COL) or row.get(MLA_COL) or "Sin SKU").strip()
         pct = normalise_pct(row.get(PCT_DIF_COL))
+        score = row.get("score")
         smap[sku]["total"] += 1
         smap[sku]["descripcion"] = (row.get("DESCRIPCION") or "").strip()
         if not smap[sku]["rot"]:
             smap[sku]["rot"] = (row.get(ROT_COL) or "").strip().upper()
         if pct is not None:
             smap[sku]["pct_sum"] += abs(pct)
-        if pct is not None and abs(pct) >= threshold:
+        if score is not None and 0 < score < 8:
             smap[sku]["count"] += 1
     results = []
     for sku, d in smap.items():
@@ -211,7 +212,7 @@ def build_sku_deviation_chart(rows: list[dict], threshold: int = 10) -> list:
     return results[:20]
 
 
-def build_rot_chart(rows: list[dict], threshold: int = 15) -> list:
+def build_rot_chart(rows: list[dict]) -> list:
     rmap = defaultdict(lambda: {"scores": [], "infraction_count": 0, "total": 0})
     for row in rows:
         rot = (row.get(ROT_COL) or "").strip().upper()
@@ -221,11 +222,13 @@ def build_rot_chart(rows: list[dict], threshold: int = 15) -> list:
         rmap[rot]["total"] += 1
         if score is not None:
             try:
-                rmap[rot]["scores"].append(int(score))
+                score_num = int(score)
             except (ValueError, TypeError):
-                pass
-        if abs(score) > 0 and abs(score) <= threshold:
-            rmap[rot]["infraction_count"] += 1
+                score_num = None
+            if score_num is not None:
+                rmap[rot]["scores"].append(score_num)
+                if 0 < score_num < 8:
+                    rmap[rot]["infraction_count"] += 1
     results = []
     for rot, d in rmap.items():
         scores = d["scores"]
@@ -240,7 +243,7 @@ def build_rot_chart(rows: list[dict], threshold: int = 15) -> list:
     return results
 
 
-def build_deviation_chart(rows: list[dict], threshold: int = 15) -> list:
+def build_deviation_chart(rows: list[dict]) -> list:
     deduped = _deduplicate_by_sku_day(rows)
     dmap = defaultdict(lambda: {"count": 0, "total": 0, "usuario": ""})
     for row in deduped:
@@ -252,7 +255,7 @@ def build_deviation_chart(rows: list[dict], threshold: int = 15) -> list:
             score_num = int(score) if score is not None else 0
         except (ValueError, TypeError):
             score_num = 0
-        if score_num > 0 and score_num <= threshold:
+        if 0 < score_num < 8:
             dmap[razon]["count"] += 1
     results = []
     for name, d in dmap.items():
@@ -289,7 +292,7 @@ def build_monthly_summary(rows: list[dict]) -> dict:
     }
 
 
-def build_monthly_deviation_chart(rows: list[dict], threshold: int = 15) -> list:
+def build_monthly_deviation_chart(rows: list[dict]) -> list:
     deduped = _deduplicate_by_mla_day(rows)
     mmap = defaultdict(lambda: defaultdict(lambda: {"count": 0, "total": 0, "score_sum": 0.0}))
     for row in deduped:
@@ -305,7 +308,7 @@ def build_monthly_deviation_chart(rows: list[dict], threshold: int = 15) -> list
         mmap[fecha][razon]["total"] += 1
         if score_num > 0:
             mmap[fecha][razon]["score_sum"] += score_num
-            if score_num <= threshold:
+            if score_num < 8:
                 mmap[fecha][razon]["count"] += 1
     results = []
     for month in sorted(mmap.keys()):

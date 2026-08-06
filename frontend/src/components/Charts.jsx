@@ -158,7 +158,7 @@ const BarPanel = memo(function BarPanel({ data, allDatesData, onSelect }) {
   );
 });
 
-const InfractionPanel = memo(function InfractionPanel({ data, onSelect }) {
+const InfractionPanel = memo(function InfractionPanel({ data, onSelect, threshold }) {
   const sorted = useMemo(() =>
     [...data].sort((a, b) => b.count - a.count),
     [data]
@@ -183,13 +183,13 @@ const InfractionPanel = memo(function InfractionPanel({ data, onSelect }) {
               return (
                 <div style={getTooltipStyle().contentStyle}>
                   <p style={{ marginBottom: 4, fontWeight: 600 }}>{d.fullName || label}</p>
-                  <p>% Infracción (≥15%): {d.pctInfraccion}%</p>
+                  <p>% Infracción (≥{threshold}%): {d.pctInfraccion}%</p>
                   <p>Publicaciones en infracción: {d.count} / {d.total}</p>
                 </div>
               );
             }}
           />
-          <Bar dataKey="count" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelect?.(d, 15)} cursor="pointer">
+          <Bar dataKey="count" radius={[0, 4, 4, 0]} isAnimationActive={false} onClick={(d) => onSelect?.(d, threshold)} cursor="pointer">
             {sorted.map((entry, i) => (
               <Cell key={i} fill={entry.pctInfraccion >= 50 ? "#ef4444" : entry.pctInfraccion >= 30 ? "#f97316" : "#eab308"} />
             ))}
@@ -202,7 +202,7 @@ const InfractionPanel = memo(function InfractionPanel({ data, onSelect }) {
   );
 });
 
-const DeviationPanel = memo(function DeviationPanel({ data, allDatesData, onSelect }) {
+const DeviationPanel = memo(function DeviationPanel({ data, allDatesData, onSelect, threshold }) {
   const [view, setView] = useState("day");
 
   const currentData = view === "day" ? data : allDatesData;
@@ -216,7 +216,7 @@ const DeviationPanel = memo(function DeviationPanel({ data, allDatesData, onSele
       <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "4px 0 0" }}>
         {view === "day" ? "Mostrando datos del día seleccionado" : "Mostrando datos de todas las fechas del dataset"}
       </p>
-      <InfractionPanel data={currentData} onSelect={onSelect} />
+      <InfractionPanel data={currentData} onSelect={onSelect} threshold={threshold} />
     </>
   );
 });
@@ -358,7 +358,7 @@ function layoutsEqual(a, b) {
   });
 }
 
-export default function Charts({ clients, allDatesClients, infractionChart, allDatesInfractionChart, monthlySummary, skuDeviationChart, rotChart, onSelect, onSelectSku }) {
+export default function Charts({ clients, allDatesClients, infractionChart, allDatesInfractionChart, deviationThreshold, monthlySummary, skuDeviationChart, rotChart, onSelect, onSelectSku }) {
   const [savedLayout, setSavedLayout] = useState(loadChartLayout);
 
   function handleSelect(data, pctThreshold = null) {
@@ -382,8 +382,8 @@ export default function Charts({ clients, allDatesClients, infractionChart, allD
     },
     infractionChart && infractionChart.length > 0 && {
       id: "infractionAccounts",
-      title: "Top 15 cuentas en infracción (≥15%)",
-      content: <DeviationPanel data={infractionChart} allDatesData={allDatesInfractionChart} onSelect={handleSelect} />,
+      title: `Top 15 cuentas en infracción (≥${deviationThreshold}%)`,
+      content: <DeviationPanel data={infractionChart} allDatesData={allDatesInfractionChart} onSelect={handleSelect} threshold={deviationThreshold} />,
     },
     rotChart && rotChart.length > 0 && {
       id: "rotChart",

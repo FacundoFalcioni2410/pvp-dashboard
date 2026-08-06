@@ -10,17 +10,17 @@ import {
 
 const PAGE_SIZE = 50;
 
-function buildMessage(descripcion, pvp, allowedPct) {
-  const pct = allowedPct ?? 15;
+function buildMessage(descripcion, pvp, allowedPct, defaultThreshold) {
+  const pct = allowedPct ?? defaultThreshold;
   const desc = descripcion || "el producto";
   const pvpNum = parseFloat(pvp);
   const calculated = !isNaN(pvpNum) ? Math.round(pvpNum * (1 - pct / 100)) : "—";
   return `Buenas días! Como están? Les envío esta publicación por ${desc}. Les pido si me ayudan subiéndolo a partir de ${calculated}`;
 }
 
-function CopyButton({ row }) {
+function CopyButton({ row, defaultThreshold }) {
   const [copied, setCopied] = useState(false);
-  const msg = buildMessage(row[FIELDS.DESCRIPCION], row[FIELDS.PVP], row.allowed_pct);
+  const msg = buildMessage(row[FIELDS.DESCRIPCION], row[FIELDS.PVP], row.allowed_pct, defaultThreshold);
 
   const handleCopy = async (e) => {
     e.stopPropagation();
@@ -93,7 +93,13 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
   const [evoTo, setEvoTo] = useState("");
   const [allSkuRows, setAllSkuRows] = useState(null);
   const { widths, onMouseDown } = useColumnResize();
-  const { activeDatasetId } = useDashboard();
+  const { activeDatasetId, thresholdCount, scoreConfig } = useDashboard();
+  const defaultThreshold = scoreConfig?.defaultThreshold ?? 15;
+
+  const columns = useMemo(
+    () => (thresholdCount > 0 ? COLUMNS : COLUMNS.filter((c) => c.key !== "_allowed_pct")),
+    [thresholdCount]
+  );
 
   useEffect(() => { setAllSkuRows(null); }, [sku, activeDatasetId]);
 
@@ -318,11 +324,11 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
               style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}
             >
               <colgroup>
-                {COLUMNS.map((c) => <col key={c.key} style={{ width: widths[c.key] }} />)}
+                {columns.map((c) => <col key={c.key} style={{ width: widths[c.key] }} />)}
               </colgroup>
               <thead>
                 <tr>
-                  {COLUMNS.map((c) => (
+                  {columns.map((c) => (
                     <th
                       key={c.key}
                       className={c.sortable ? "sortable" : ""}
@@ -345,7 +351,7 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
               <tbody>
                 {shownRows.length === 0 && (
                   <tr>
-                    <td colSpan={COLUMNS.length} style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
+                    <td colSpan={columns.length} style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
                       No hay datos para el día seleccionado
                     </td>
                   </tr>
@@ -366,16 +372,18 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
                     <td>{fmt(r[FIELDS.PRECIO])}</td>
                     <td>{fmt(r[FIELDS.PVP])}</td>
                     <td>{fmtPct(r, FIELDS.PCT_DIF)}</td>
-                    <td style={{ color: "var(--text-muted)" }}>
-                      {r.allowed_pct != null ? `${r.allowed_pct}%` : "15%"}
-                    </td>
+                    {thresholdCount > 0 && (
+                      <td style={{ color: "var(--text-muted)" }}>
+                        {r.allowed_pct != null ? `${r.allowed_pct}%` : `${defaultThreshold}%`}
+                      </td>
+                    )}
                     <td>
                       <span className="score-badge" style={{ background: scoreColor(r.score) }}>
                         {r.score ?? "—"}
                       </span>
                     </td>
                     <td>
-                      <CopyButton row={r} />
+                      <CopyButton row={r} defaultThreshold={defaultThreshold} />
                     </td>
                   </tr>
                 ))}

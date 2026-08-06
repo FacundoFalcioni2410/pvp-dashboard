@@ -273,7 +273,8 @@ function useTheme() {
 function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { dashboardData, setDateData } = useDashboard();
+  const { dashboardData, setDateData, scoreConfig } = useDashboard();
+  const defaultThreshold = scoreConfig?.defaultThreshold ?? 15;
 
   const dates = dashboardData?.dates ?? [];
   const selectedDate = dashboardData?.selectedDate ?? null;
@@ -406,6 +407,7 @@ function Dashboard() {
               scatter={scatter}
               infractionChart={infractionChart}
               allDatesInfractionChart={allDatesInfractionChart}
+              deviationThreshold={defaultThreshold}
               monthlySummary={monthlySummary}
               skuDeviationChart={skuDeviationChart}
               rotChart={rotChart}
@@ -425,7 +427,7 @@ export default function App() {
   const [showScoreConfig, setShowScoreConfig] = useState(false);
   const {
     dashboardData, setDashboardData, loading, loadingData,
-    thresholdCount, setThresholdCount, datasets,
+    thresholdCount, refreshThresholdCount, datasets,
     globalFilters, setGlobalFilter, filterOptions,
   } = useDashboard();
 
@@ -455,7 +457,7 @@ export default function App() {
           {theme === "dark" ? "☀️" : "🌙"}
         </button>
         <FileUpload onData={setDashboardData} />
-        <ThresholdUpload thresholdCount={thresholdCount} onUploaded={setThresholdCount} />
+        <ThresholdUpload thresholdCount={thresholdCount} onUploaded={refreshThresholdCount} />
         <ScoreLegend onEdit={() => setShowScoreConfig(true)} />
         <DatasetList />
         {rows.length > 0 && (

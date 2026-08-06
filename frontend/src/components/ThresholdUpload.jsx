@@ -5,6 +5,7 @@ export default function ThresholdUpload({ thresholdCount, onUploaded }) {
   const inputRef = useRef();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   async function upload(file) {
     if (!file) return;
@@ -17,6 +18,20 @@ export default function ThresholdUpload({ thresholdCount, onUploaded }) {
       onUploaded(data.total);
     } catch (e) {
       setError(e.response?.data?.detail ?? "Error al subir umbrales");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function clear() {
+    setConfirmOpen(false);
+    setLoading(true);
+    setError(null);
+    try {
+      const { data } = await axios.delete("/upload-thresholds");
+      onUploaded(data.total);
+    } catch (e) {
+      setError(e.response?.data?.detail ?? "Error al deshabilitar umbrales");
     } finally {
       setLoading(false);
     }
@@ -48,7 +63,32 @@ export default function ThresholdUpload({ thresholdCount, onUploaded }) {
           </>
         )}
       </button>
+      {thresholdCount > 0 && !loading && (
+        <button
+          className="threshold-clear-btn"
+          onClick={() => setConfirmOpen(true)}
+          title="Deshabilitar umbrales cargados (volver al valor por defecto)"
+        >
+          ✕
+        </button>
+      )}
       {error && <span className="threshold-error">{error}</span>}
+
+      {confirmOpen && (
+        <div className="confirm-overlay" onClick={() => setConfirmOpen(false)}>
+          <div className="confirm-panel" onClick={(e) => e.stopPropagation()}>
+            <p className="confirm-title">¿Deshabilitar umbrales?</p>
+            <p className="confirm-body">
+              Se borrarán los umbrales cargados y se usará el valor por defecto. Podés volver a
+              habilitarlos subiendo el Excel de nuevo.
+            </p>
+            <div className="confirm-actions">
+              <button className="score-config-cancel" onClick={() => setConfirmOpen(false)}>Cancelar</button>
+              <button className="confirm-danger" onClick={clear}>Deshabilitar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
