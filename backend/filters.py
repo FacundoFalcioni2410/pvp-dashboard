@@ -1,6 +1,6 @@
 import json
 
-from config import CANAL_COL, MACRO_FAMILIA_COL, RAZON_SOCIAL_COL, ROT_COL, TIPO_CLIENTE_COL
+from config import CANAL_COL, MACRO_FAMILIA_COL, RAZON_SOCIAL_COL, ROT_COL, SKU_COL, TIPO_CLIENTE_COL
 from database import get_threshold_count
 from scoring import enrich_rows
 from charts import (
@@ -42,6 +42,15 @@ def apply_global_filters(rows, tipoCliente=None, canal=None, macrofamilia=None, 
                 return False
         return True
     return [r for r in rows if matches(r)]
+
+
+def filter_by_sku(rows, skus):
+    if not skus:
+        return rows
+    selected = {s.strip().upper() for s in skus if s.strip()}
+    if not selected:
+        return rows
+    return [r for r in rows if (str(r.get(SKU_COL) or "")).strip().upper() in selected]
 
 
 def build_filter_options(rows) -> dict:

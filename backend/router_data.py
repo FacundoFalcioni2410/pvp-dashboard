@@ -18,7 +18,7 @@ from database import (
     query_dataset_dates,
     query_dataset_rows,
 )
-from filters import apply_global_filters, build_filter_options, build_response
+from filters import apply_global_filters, build_filter_options, build_response, filter_by_sku
 from scoring import compute_score, enrich_rows
 
 logger = logging.getLogger("upload_timing")
@@ -61,6 +61,7 @@ def get_data(
     canal: str = Query(default=None),
     macrofamilia: str = Query(default=None),
     rot: str = Query(default=None),
+    sku: str = Query(default=None),
 ):
     datasets = list_datasets_from_catalog()
     if not datasets:
@@ -74,6 +75,11 @@ def get_data(
     resolved_date = None if all_dates else (date or (dates[0] if dates else None))
     raw_rows = query_dataset_rows(dataset_id, resolved_date)
     raw_all_rows = raw_rows if all_dates or resolved_date is None else query_dataset_rows(dataset_id, None)
+
+    sku_list = [s.strip() for s in sku.split(",") if s.strip()] if sku else []
+    if sku_list:
+        raw_rows = filter_by_sku(raw_rows, sku_list)
+        raw_all_rows = filter_by_sku(raw_all_rows, sku_list)
 
     filter_options = build_filter_options(raw_rows)
 
