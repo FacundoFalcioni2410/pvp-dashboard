@@ -5,7 +5,7 @@ const DashboardContext = createContext(null);
 const DEFAULT_SCORE_BANDS = [5, 10, 15, 20, 25, 30];
 const DEFAULT_THRESHOLD = 15;
 const DEFAULT_SCORE_CONFIG = { bands: DEFAULT_SCORE_BANDS, defaultThreshold: DEFAULT_THRESHOLD };
-const DEFAULT_FILTERS = { tipoCliente: [], canal: [], macrofamilia: [], rot: [] };
+const DEFAULT_FILTERS = { tipoCliente: [], canal: [], macrofamilia: [], marca: [], rot: [] };
 
 export function DashboardProvider({ children }) {
   const [dashboardData, setDashboardDataState] = useState(null);
@@ -17,7 +17,7 @@ export function DashboardProvider({ children }) {
   const [compareDatasetId, setCompareDatasetId] = useState(null);
   const [scoreConfig, setScoreConfigState] = useState(DEFAULT_SCORE_CONFIG);
   const [globalFilters, setGlobalFiltersState] = useState(DEFAULT_FILTERS);
-  const [filterOptions, setFilterOptions] = useState({ clientes: [], canales: [], macrofamilias: [], rots: [] });
+  const [filterOptions, setFilterOptions] = useState({ clientes: [], canales: [], macrofamilias: [], marcas: [], rots: [] });
 
   // Ref so fetch callbacks always see the latest filters without recreating themselves
   const globalFiltersRef = useRef(DEFAULT_FILTERS);
@@ -145,6 +145,7 @@ export function DashboardProvider({ children }) {
     if (filters.tipoCliente && filters.tipoCliente.length > 0) params.set("tipoCliente", filters.tipoCliente.join(","));
     if (filters.canal && filters.canal.length > 0) params.set("canal", filters.canal.join(","));
     if (filters.macrofamilia && filters.macrofamilia.length > 0) params.set("macrofamilia", filters.macrofamilia.join(","));
+    if (filters.marca && filters.marca.length > 0) params.set("marca", filters.marca.join(","));
     if (filters.rot && filters.rot.length > 0) params.set("rot", filters.rot.join(","));
     return params;
   }

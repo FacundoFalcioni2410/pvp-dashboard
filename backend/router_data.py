@@ -60,6 +60,7 @@ def get_data(
     tipoCliente: str = Query(default=None),
     canal: str = Query(default=None),
     macrofamilia: str = Query(default=None),
+    marca: str = Query(default=None),
     rot: str = Query(default=None),
     sku: str = Query(default=None),
 ):
@@ -86,6 +87,7 @@ def get_data(
     tipo_cliente_list = [t.strip() for t in tipoCliente.split(",") if t.strip()] if tipoCliente else []
     canal_list = [c.strip() for c in canal.split(",") if c.strip()] if canal else []
     macrofamilia_list = [m.strip() for m in macrofamilia.split(",") if m.strip()] if macrofamilia else []
+    marca_list = [m.strip() for m in marca.split(",") if m.strip()] if marca else []
     rot_list = [r.strip() for r in rot.split(",") if r.strip()] if rot else []
 
     # Selecting every available option is semantically identical to no filter; clear the list
@@ -96,12 +98,14 @@ def get_data(
         canal_list = []
     if macrofamilia_list and {m.upper() for m in macrofamilia_list} >= {m.upper() for m in filter_options.get("macrofamilias", [])}:
         macrofamilia_list = []
+    if marca_list and {m.upper() for m in marca_list} >= {m.upper() for m in filter_options.get("marcas", [])}:
+        marca_list = []
     if rot_list and {r.upper() for r in rot_list} >= {r.upper() for r in filter_options.get("rots", [])}:
         rot_list = []
 
-    rows_no_rot = apply_global_filters(raw_rows, tipoCliente=tipo_cliente_list, canal=canal_list, macrofamilia=macrofamilia_list)
+    rows_no_rot = apply_global_filters(raw_rows, tipoCliente=tipo_cliente_list, canal=canal_list, macrofamilia=macrofamilia_list, marca=marca_list)
     rows_filtered = apply_global_filters(rows_no_rot, rot=rot_list) if rot_list else rows_no_rot
-    all_no_rot = apply_global_filters(raw_all_rows, tipoCliente=tipo_cliente_list, canal=canal_list, macrofamilia=macrofamilia_list)
+    all_no_rot = apply_global_filters(raw_all_rows, tipoCliente=tipo_cliente_list, canal=canal_list, macrofamilia=macrofamilia_list, marca=marca_list)
     all_filtered = apply_global_filters(all_no_rot, rot=rot_list) if rot_list else all_no_rot
 
     body = json.loads(build_response(rows_filtered, all_filtered, rot_rows=rows_no_rot))

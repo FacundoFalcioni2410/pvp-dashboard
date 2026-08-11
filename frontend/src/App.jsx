@@ -108,6 +108,12 @@ function GlobalFiltersBar({ filterOptions, globalFilters, setGlobalFilter }) {
         onChange={(v) => setGlobalFilter("macrofamilia", v)}
       />
       <MultiSelectFilter
+        label="Marca"
+        options={filterOptions.marcas ?? []}
+        values={globalFilters.marca ?? []}
+        onChange={(v) => setGlobalFilter("marca", v)}
+      />
+      <MultiSelectFilter
         label="Rotación"
         options={filterOptions.rots ?? []}
         values={globalFilters.rot ?? []}

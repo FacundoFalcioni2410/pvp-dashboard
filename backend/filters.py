@@ -1,6 +1,6 @@
 import json
 
-from config import CANAL_COL, MACRO_FAMILIA_COL, RAZON_SOCIAL_COL, ROT_COL, SKU_COL, TIPO_CLIENTE_COL
+from config import CANAL_COL, MACRO_FAMILIA_COL, MARCA_COL, RAZON_SOCIAL_COL, ROT_COL, SKU_COL, TIPO_CLIENTE_COL
 from database import get_threshold_count
 from scoring import enrich_rows
 from charts import (
@@ -21,7 +21,7 @@ def _normalise_tipo(raw) -> str:
     return (raw or "").strip().upper()
 
 
-def apply_global_filters(rows, tipoCliente=None, canal=None, macrofamilia=None, rot=None):
+def apply_global_filters(rows, tipoCliente=None, canal=None, macrofamilia=None, marca=None, rot=None):
     selected_tipos = {t.upper() for t in tipoCliente} if tipoCliente else set()
 
     def matches(row):
@@ -35,6 +35,10 @@ def apply_global_filters(rows, tipoCliente=None, canal=None, macrofamilia=None, 
         if macrofamilia and len(macrofamilia) > 0:
             row_macro = (row.get(MACRO_FAMILIA_COL) or "").strip().upper()
             if row_macro not in [m.upper() for m in macrofamilia]:
+                return False
+        if marca and len(marca) > 0:
+            row_marca = (row.get(MARCA_COL) or "").strip().upper()
+            if row_marca not in [m.upper() for m in marca]:
                 return False
         if rot and len(rot) > 0:
             row_rot = (row.get(ROT_COL) or "").strip().upper()
@@ -56,13 +60,14 @@ def filter_by_sku(rows, skus):
 def build_filter_options(rows) -> dict:
     canales = sorted({(r.get(CANAL_COL) or "").strip() for r in rows if (r.get(CANAL_COL) or "").strip() and not (r.get(CANAL_COL) or "").strip().lstrip("-").isdigit()})
     macrofamilias = sorted({(r.get(MACRO_FAMILIA_COL) or "").strip() for r in rows if (r.get(MACRO_FAMILIA_COL) or "").strip()})
+    marcas = sorted({(r.get(MARCA_COL) or "").strip() for r in rows if (r.get(MARCA_COL) or "").strip()})
     rots = sorted({(r.get(ROT_COL) or "").strip().upper() for r in rows if (r.get(ROT_COL) or "").strip()})
     tipos = sorted({
         _normalise_tipo(r.get(TIPO_CLIENTE_COL))
         for r in rows
         if _normalise_tipo(r.get(TIPO_CLIENTE_COL)) not in EMPTY_TIPO_VALUES
     })
-    return {"tipoCliente": tipos, "canales": canales, "macrofamilias": macrofamilias, "rots": rots}
+    return {"tipoCliente": tipos, "canales": canales, "macrofamilias": macrofamilias, "marcas": marcas, "rots": rots}
 
 
 def build_response(rows: list[dict], all_rows: list[dict] | None = None, rot_rows: list[dict] | None = None) -> str:
