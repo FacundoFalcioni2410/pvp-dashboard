@@ -19,50 +19,45 @@ async def upload_thresholds(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Could not parse Excel file: {e}")
 
-    df = None
+    def is_mla_col(c: str) -> bool:
+        c = c.lower()
+        return "mla" in c or "sku" in c or "código" in c or "codigo" in c
+
+    def is_pct_col(c: str) -> bool:
+        c = c.strip().upper()
+        return c == "% PERMITIDO" or "TOLERANCIA" in c
+
+    dfs = []
     for sheet in xl.sheet_names:
-        for header_row in (0, 1):
+        for header_row in range(10):
             candidate = xl.parse(sheet, header=header_row)
             candidate.columns = [str(c).strip() for c in candidate.columns]
-            cols_lower = [c.lower() for c in candidate.columns]
-            has_mla = any("mla" in c or "sku" in c for c in cols_lower)
-            has_pct = any(c.strip().upper() == "% PERMITIDO" for c in candidate.columns)
-            if has_mla and has_pct:
-                df = candidate
+            cols = list(candidate.columns)
+            mla_col = next((c for c in cols if is_mla_col(c)), None)
+            pct_col = next((c for c in cols if is_pct_col(c) and c != mla_col), None)
+            if mla_col and pct_col:
+                dfs.append((candidate, mla_col, pct_col))
                 break
-        if df is not None:
-            break
 
-    if df is None:
+    if not dfs:
         raise HTTPException(
             status_code=422,
-            detail="No sheet found with an MLA column and a threshold/percentage column.",
-        )
-
-    mla_col = next((c for c in df.columns if "mla" in c.lower() or "sku" in c.lower()), None)
-    pct_col = next(
-        (c for c in df.columns if c.strip().upper() == "% PERMITIDO" and c != mla_col),
-        None,
-    )
-
-    if not mla_col or not pct_col:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Could not identify SKU/MLA and threshold columns. Found columns: {list(df.columns)}",
+            detail="No sheet found with a SKU/Código column and a Porcentaje de Tolerancia column.",
         )
 
     entries = []
-    for _, row in df.iterrows():
-        mla = str(row[mla_col]).strip()
-        try:
-            pct = float(row[pct_col])
-        except (ValueError, TypeError):
-            continue
-        if not mla or mla.lower() == "nan":
-            continue
-        if abs(pct) <= 1.5:
-            pct = pct * 100
-        entries.append((mla, abs(pct)))
+    for df, mla_col, pct_col in dfs:
+        for _, row in df.iterrows():
+            mla = str(row[mla_col]).strip()
+            try:
+                pct = float(row[pct_col])
+            except (ValueError, TypeError):
+                continue
+            if not mla or mla.lower() == "nan":
+                continue
+            if abs(pct) <= 1.5:
+                pct = pct * 100
+            entries.append((mla, abs(pct)))
 
     if not entries:
         raise HTTPException(status_code=422, detail="No valid MLA/threshold rows found.")
