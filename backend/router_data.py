@@ -10,7 +10,7 @@ from pathlib import Path
 
 import httpx
 import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -288,15 +288,15 @@ class BlobUploadRequest(BaseModel):
     filename: str = Field(min_length=1, max_length=200)
 
 
-def _delete_blob(blob_url: str, cookie_header: str) -> None:
-    blob_service_url = os.getenv("BLOBAPI_URL", "").rstrip("/")
-    if not blob_service_url:
+def _delete_blob(blob_url: str) -> None:
+    token = os.getenv("BLOB_READ_WRITE_TOKEN", "")
+    if not token:
         return
     try:
         httpx.post(
-            f"{blob_service_url}/api/blob/delete",
-            json={"url": blob_url},
-            headers={"cookie": cookie_header},
+            "https://blob.vercel-storage.com/delete",
+            json={"urls": [blob_url]},
+            headers={"authorization": f"Bearer {token}", "x-api-version": "10"},
             timeout=10,
         )
     except httpx.HTTPError:
@@ -304,7 +304,7 @@ def _delete_blob(blob_url: str, cookie_header: str) -> None:
 
 
 @router.post("/upload-from-blob")
-async def upload_excel_from_blob(payload: BlobUploadRequest, request: Request, user: CsrfUser):
+async def upload_excel_from_blob(payload: BlobUploadRequest, user: CsrfUser):
     """Ingest a workbook already uploaded to Vercel Blob by the browser.
 
     Used instead of /upload when the file is too large for a serverless
@@ -337,7 +337,7 @@ async def upload_excel_from_blob(payload: BlobUploadRequest, request: Request, u
     try:
         body = _ingest_workbook(contents, safe_filename)
     finally:
-        _delete_blob(payload.blob_url, request.headers.get("cookie", ""))
+        _delete_blob(payload.blob_url)
 
     return Response(content=json.dumps(body, ensure_ascii=False), media_type="application/json")
 

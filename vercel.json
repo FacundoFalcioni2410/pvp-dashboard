@@ -11,10 +11,7 @@
     "backend": {
       "root": "backend/",
       "framework": "fastapi",
-      "entrypoint": "main:app",
-      "bindings": [
-        { "type": "service", "service": "blobapi", "format": "url", "env": "BLOBAPI_URL" }
-      ]
+      "entrypoint": "main:app"
     },
     "blobapi": {
       "root": "blob-api/",

@@ -1,6 +1,5 @@
 import http from "node:http";
 import { handleUpload } from "@vercel/blob/client";
-import { del } from "@vercel/blob";
 import { isAuthenticated } from "./lib/auth.js";
 
 const ALLOWED_CONTENT_TYPES = [
@@ -8,8 +7,6 @@ const ALLOWED_CONTENT_TYPES = [
   "application/vnd.ms-excel",
   "application/octet-stream",
 ];
-
-const BLOB_URL_PATTERN = /^https:\/\/[a-z0-9]+\.public\.blob\.vercel-storage\.com\//;
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -58,42 +55,15 @@ async function handleUploadRoute(req, res) {
   }
 }
 
-async function handleDeleteRoute(req, res) {
-  const cookie = req.headers.cookie || "";
-  if (!(await isAuthenticated(cookie))) {
-    sendJson(res, 401, { error: "Not authenticated" });
-    return;
-  }
-
-  const { url } = await readJsonBody(req);
-  if (typeof url !== "string" || !BLOB_URL_PATTERN.test(url)) {
-    sendJson(res, 400, { error: "Invalid blob url" });
-    return;
-  }
-
-  try {
-    await del(url);
-  } catch {
-    // Best-effort cleanup; the blob store lifecycle policy is the backstop.
-  }
-  sendJson(res, 200, { ok: true });
-}
-
 const server = http.createServer((req, res) => {
   const { pathname } = new URL(req.url, `http://${req.headers.host}`);
 
-  const route = req.method === "POST" && pathname === "/api/blob/upload"
-    ? handleUploadRoute
-    : req.method === "POST" && pathname === "/api/blob/delete"
-      ? handleDeleteRoute
-      : null;
-
-  if (!route) {
+  if (req.method !== "POST" || pathname !== "/api/blob/upload") {
     sendJson(res, 404, { error: "Not found" });
     return;
   }
 
-  route(req, res).catch(() => sendJson(res, 500, { error: "Internal error" }));
+  handleUploadRoute(req, res).catch(() => sendJson(res, 500, { error: "Internal error" }));
 });
 
 server.listen(process.env.PORT || 3000);
