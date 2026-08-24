@@ -36,6 +36,11 @@ allowed_hosts = [
     value.strip() for value in os.getenv("PVP_ALLOWED_HOSTS", ",".join(default_hosts)).split(",")
     if value.strip()
 ]
+if is_vercel:
+    # Service-to-service calls over a Vercel Services binding (e.g. blob-api
+    # calling /auth/me to validate a session) arrive with a Host header on
+    # this internal domain rather than the public deployment host.
+    allowed_hosts.append("*.services.vercel-infra.com")
 
 app = FastAPI(
     title="Excel Price Dashboard API",
