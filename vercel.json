@@ -15,7 +15,7 @@
     },
     "blobapi": {
       "root": "blob-api/",
-      "framework": null
+      "framework": "node"
     }
   },
   "rewrites": [
