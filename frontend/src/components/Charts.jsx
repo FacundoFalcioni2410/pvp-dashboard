@@ -96,19 +96,34 @@ const LevelDistributionChart = memo(function LevelDistributionChart({ levelDistr
   // original rounded % in the labels.
   const pctTotal = data.reduce((s, d) => s + d.pct, 0) || 1;
 
-  // Each label sits at the exact point where its segment starts (not its
-  // center), so it always reads as "the level starting here" — starts are
-  // strictly increasing left to right, so labels never land on top of each
-  // other the way center-anchored ones could for a narrow middle segment.
+  // Each label centers on its own segment's true position — no horizontal
+  // clamping, so it always lines up with the segment it describes. Labels
+  // alternate above/below the bar so two narrow neighbors never fight for
+  // the same line. The container reserves fixed side margins so a label
+  // near the left/right edge has room to overflow without being clipped.
   const segments = data.reduce((acc, d) => {
     const width = (d.pct / pctTotal) * 100;
     const start = acc.length > 0 ? acc[acc.length - 1].cursorEnd : 0;
-    acc.push({ ...d, width, start, cursorEnd: start + width });
+    const center = start + width / 2;
+    acc.push({ ...d, width, start, center, cursorEnd: start + width });
     return acc;
   }, []);
+  const aboveLabels = segments.filter((_, i) => i % 2 === 1);
+  const belowLabels = segments.filter((_, i) => i % 2 === 0);
 
   return (
-    <div className="chart-flex-fill" style={{ display: "flex", flexDirection: "column", paddingRight: "32px" }}>
+    <div className="chart-flex-fill" style={{ display: "flex", flexDirection: "column", padding: "0 32px" }}>
+      <div style={{ position: "relative", flex: "none", minHeight: 30, marginBottom: 4 }}>
+        {aboveLabels.map((s) => (
+          <div key={s.level} style={{ position: "absolute", bottom: 0, left: `${s.center}%`, transform: "translateX(-50%)", whiteSpace: "nowrap", textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{s.pct}% · {s.count} SKUs</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, justifyContent: "center" }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: scoreColor(s.level, maxScore), flex: "none" }} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text)" }}>{s.name}</span>
+            </div>
+          </div>
+        ))}
+      </div>
       <div style={{ display: "flex", width: "100%", height: 40, borderRadius: 6, overflow: "hidden", border: "1px solid var(--border)", flex: "none" }}>
         {segments.map((s, i) => (
           <div
@@ -130,9 +145,9 @@ const LevelDistributionChart = memo(function LevelDistributionChart({ levelDistr
         ))}
       </div>
       <div style={{ position: "relative", flex: 1, marginTop: 8, minHeight: 30 }}>
-        {segments.map((s) => (
-          <div key={s.level} style={{ position: "absolute", top: 0, left: `${s.start}%`, whiteSpace: "nowrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+        {belowLabels.map((s) => (
+          <div key={s.level} style={{ position: "absolute", top: 0, left: `${s.center}%`, transform: "translateX(-50%)", whiteSpace: "nowrap", textAlign: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, justifyContent: "center" }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: scoreColor(s.level, maxScore), flex: "none" }} />
               <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text)" }}>{s.name}</span>
             </div>
