@@ -310,7 +310,7 @@ def login(payload: LoginRequest, request: Request, response: Response):
         csrf_token = secrets.token_urlsafe(32)
         now = _utcnow()
         expires = now + timedelta(hours=SESSION_HOURS)
-        conn.execute("DELETE FROM sessions WHERE user_id = ? OR expires_at <= ?", (user["id"], _iso(now)))
+        conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (_iso(now),))
         conn.execute(
             "INSERT INTO sessions (token_hash, user_id, csrf_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
             (_token_hash(session_token), user["id"], _token_hash(csrf_token), _iso(now), _iso(expires)),
