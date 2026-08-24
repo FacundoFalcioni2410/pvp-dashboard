@@ -12,9 +12,13 @@
       "root": "backend/",
       "framework": "fastapi",
       "entrypoint": "main:app"
+    },
+    "blobapi": {
+      "root": "blob-api/"
     }
   },
   "rewrites": [
+    { "source": "/api/blob/:path*", "destination": { "service": "blobapi" } },
     { "source": "/api/:path*", "destination": { "service": "backend" } },
     { "source": "/(.*)", "destination": { "service": "frontend" } }
   ]

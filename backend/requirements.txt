@@ -6,3 +6,4 @@ python-calamine
 python-multipart
 turso_serverless
 python-dotenv
+httpx

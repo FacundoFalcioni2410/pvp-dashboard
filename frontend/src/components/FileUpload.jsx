@@ -1,5 +1,11 @@
 import { useState, useRef } from "react";
-import { apiFetch } from "../api";
+import { upload as blobUpload } from "@vercel/blob/client";
+import { apiFetch, API_BASE_URL } from "../api";
+
+// Vercel serverless functions reject request bodies over ~4.5MB before the
+// backend ever runs. Files above this go straight to Vercel Blob from the
+// browser instead, and the backend only receives the resulting URL.
+const DIRECT_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
 
 export default function FileUpload({ onData }) {
   const [dragging, setDragging] = useState(false);
@@ -8,17 +14,35 @@ export default function FileUpload({ onData }) {
   const [fileName, setFileName] = useState(null);
   const inputRef = useRef();
 
+  async function uploadDirect(file) {
+    const form = new FormData();
+    form.append("file", file);
+    return apiFetch("/upload", { method: "POST", body: form });
+  }
+
+  async function uploadViaBlob(file) {
+    const blob = await blobUpload(file.name, file, {
+      access: "public",
+      handleUploadUrl: `${API_BASE_URL}/blob/upload`,
+    });
+    return apiFetch("/upload-from-blob", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ blob_url: blob.url, filename: file.name }),
+    });
+  }
+
   async function upload(file) {
     if (!file || loading) return;
     setLoading(true);
     setError(null);
     setFileName(file.name);
-    const form = new FormData();
-    form.append("file", file);
     const t0 = performance.now();
     console.log(`[upload] "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) — inicio`);
     try {
-      const response = await apiFetch("/upload", { method: "POST", body: form });
+      const response = file.size > DIRECT_UPLOAD_MAX_BYTES
+        ? await uploadViaBlob(file)
+        : await uploadDirect(file);
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail ?? "Error al subir el archivo");
       const seconds = ((performance.now() - t0) / 1000).toFixed(2);

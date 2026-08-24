@@ -1,18 +1,21 @@
 import io
 import json
 import logging
+import os
 import re
 import time
 import zipfile
 from collections import defaultdict
 from pathlib import Path
 
+import httpx
 import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
 
 from config import (
-    MAX_EXCEL_COLUMNS, MAX_EXCEL_ROWS, MAX_EXCEL_SHEETS,
+    MAX_BLOB_DOWNLOAD_BYTES, MAX_EXCEL_COLUMNS, MAX_EXCEL_ROWS, MAX_EXCEL_SHEETS,
     MAX_EXCEL_UNCOMPRESSED_BYTES, MAX_UPLOAD_BYTES,
     PCT_DIF_COL, RAZON_SOCIAL_COL, SKU_COL,
 )
@@ -126,20 +129,10 @@ def get_data(
     return Response(content=json.dumps(body, ensure_ascii=False), media_type="application/json")
 
 
-@router.post("/upload")
-async def upload_excel(user: CsrfUser, file: UploadFile = File(...)):
+def _ingest_workbook(contents: bytes, safe_filename: str) -> dict:
     t_start = time.perf_counter()
-    safe_filename = Path(file.filename or "").name
-    safe_filename = re.sub(r"[^\w. -]", "_", safe_filename, flags=re.UNICODE)[:150]
     logger.info("upload start: %s", safe_filename)
 
-    if Path(safe_filename).suffix.lower() not in {".xlsx", ".xls"}:
-        raise HTTPException(status_code=400, detail="Only .xlsx / .xls files are accepted")
-
-    contents = await file.read(MAX_UPLOAD_BYTES + 1)
-    await file.close()
-    if len(contents) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="File is larger than the configured upload limit")
     if not contents:
         raise HTTPException(status_code=400, detail="The uploaded file is empty")
     if Path(safe_filename).suffix.lower() == ".xlsx":
@@ -269,6 +262,82 @@ async def upload_excel(user: CsrfUser, file: UploadFile = File(...)):
         "upload [%s]: charts built in %.2fs — total %.2fs",
         safe_filename, t_end - t_queried, t_end - t_start,
     )
+
+    return body
+
+
+@router.post("/upload")
+async def upload_excel(user: CsrfUser, file: UploadFile = File(...)):
+    safe_filename = Path(file.filename or "").name
+    safe_filename = re.sub(r"[^\w. -]", "_", safe_filename, flags=re.UNICODE)[:150]
+
+    if Path(safe_filename).suffix.lower() not in {".xlsx", ".xls"}:
+        raise HTTPException(status_code=400, detail="Only .xlsx / .xls files are accepted")
+
+    contents = await file.read(MAX_UPLOAD_BYTES + 1)
+    await file.close()
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File is larger than the configured upload limit")
+
+    body = _ingest_workbook(contents, safe_filename)
+    return Response(content=json.dumps(body, ensure_ascii=False), media_type="application/json")
+
+
+class BlobUploadRequest(BaseModel):
+    blob_url: str = Field(min_length=1, max_length=2048)
+    filename: str = Field(min_length=1, max_length=200)
+
+
+def _delete_blob(blob_url: str, cookie_header: str) -> None:
+    blob_service_url = os.getenv("BLOBAPI_URL", "").rstrip("/")
+    if not blob_service_url:
+        return
+    try:
+        httpx.post(
+            f"{blob_service_url}/api/blob/delete",
+            json={"url": blob_url},
+            headers={"cookie": cookie_header},
+            timeout=10,
+        )
+    except httpx.HTTPError:
+        logger.warning("Failed to delete blob %s after ingestion", blob_url)
+
+
+@router.post("/upload-from-blob")
+async def upload_excel_from_blob(payload: BlobUploadRequest, request: Request, user: CsrfUser):
+    """Ingest a workbook already uploaded to Vercel Blob by the browser.
+
+    Used instead of /upload when the file is too large for a serverless
+    function's ~4.5MB request body limit: the browser uploads straight to
+    Blob storage, and this endpoint only receives the resulting URL.
+    """
+    safe_filename = Path(payload.filename).name
+    safe_filename = re.sub(r"[^\w. -]", "_", safe_filename, flags=re.UNICODE)[:150]
+    if Path(safe_filename).suffix.lower() not in {".xlsx", ".xls"}:
+        raise HTTPException(status_code=400, detail="Only .xlsx / .xls files are accepted")
+    if not re.match(r"^https://[a-z0-9]+\.public\.blob\.vercel-storage\.com/", payload.blob_url):
+        raise HTTPException(status_code=400, detail="Invalid blob URL")
+
+    try:
+        with httpx.stream("GET", payload.blob_url, timeout=60) as resp:
+            resp.raise_for_status()
+            chunks = []
+            total = 0
+            for chunk in resp.iter_bytes():
+                total += len(chunk)
+                if total > MAX_BLOB_DOWNLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="File is larger than the configured upload limit")
+                chunks.append(chunk)
+            contents = b"".join(chunks)
+    except HTTPException:
+        raise
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="Could not download uploaded file") from exc
+
+    try:
+        body = _ingest_workbook(contents, safe_filename)
+    finally:
+        _delete_blob(payload.blob_url, request.headers.get("cookie", ""))
 
     return Response(content=json.dumps(body, ensure_ascii=False), media_type="application/json")
 
