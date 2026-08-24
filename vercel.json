@@ -14,7 +14,8 @@
       "entrypoint": "main:app"
     },
     "blobapi": {
-      "root": "blob-api/"
+      "root": "blob-api/",
+      "framework": null
     }
   },
   "rewrites": [
