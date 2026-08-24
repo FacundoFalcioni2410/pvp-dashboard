@@ -282,8 +282,10 @@ def build_deviation_chart(rows: list[dict]) -> list:
 
 
 def build_monthly_summary(rows: list[dict]) -> dict:
+    top = _top_score()
     deduped = _deduplicate_by_mla_day(rows)
     sku_pcts: dict[str, list[float]] = defaultdict(list)
+    sku_scores: dict[str, list[int]] = defaultdict(list)
     for row in deduped:
         sku = str(row.get(SKU_COL) or row.get(MLA_COL) or "").strip()
         if not sku:
@@ -291,12 +293,35 @@ def build_monthly_summary(rows: list[dict]) -> dict:
         pct = normalise_pct(row.get(PCT_DIF_COL))
         if pct is not None:
             sku_pcts[sku].append(abs(pct))
+        score = row.get("score")
+        if score is not None:
+            try:
+                sku_scores[sku].append(int(score))
+            except (TypeError, ValueError):
+                pass
     sku_avgs = [sum(v) / len(v) for v in sku_pcts.values() if v]
     avg_deviation = round(sum(sku_avgs) / len(sku_avgs), 1) if sku_avgs else 0
+
+    level_counts: dict[int, int] = defaultdict(int)
+    for scores in sku_scores.values():
+        if not scores:
+            continue
+        avg_score = max(1, min(top, round(sum(scores) / len(scores))))
+        level_counts[avg_score] += 1
+    total_skus_scored = sum(level_counts.values())
+    level_distribution = [
+        {
+            "level": level,
+            "count": level_counts.get(level, 0),
+            "pct": round(100 * level_counts.get(level, 0) / total_skus_scored) if total_skus_scored else 0,
+        }
+        for level in range(1, top + 1)
+    ]
+
     return {
         "skuCount": len(sku_pcts),
         "avgDeviation": avg_deviation,
-        "totalPubs": len(deduped),
+        "levelDistribution": level_distribution,
     }
 
 

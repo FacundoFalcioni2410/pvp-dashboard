@@ -14,8 +14,10 @@ const Grid = WidthProvider(GridLayout);
 
 const CHART_PAGE = 15;
 
-const PIE_COLORS_LIGHT = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"];
-const PIE_COLORS_DARK = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181"];
+// Muted, desaturated palette (not pastel) shared by every pie/donut chart —
+// each slice gets its own tone without any of them reading as bright/loud.
+const PIE_COLORS_LIGHT = ["#4c6b8a", "#8a6a45", "#5c8a72", "#8a7a45", "#7a5c7f", "#6b7480", "#8a5a4c", "#45838a", "#8a4c68", "#5c5c8a"];
+const PIE_COLORS_DARK = ["#7d9cbd", "#bd9968", "#82b399", "#bdab68", "#a988ae", "#98a3ad", "#ba8a7c", "#75b3ba", "#ba7c98", "#8c8cba"];
 
 function getPieColors() {
   const light = document.documentElement.getAttribute("data-theme") === "light";
@@ -58,9 +60,85 @@ const SummaryStats = memo(function SummaryStats({ monthlySummary }) {
         </span>
         <span className="stat-label">Desvío Promedio (mes)</span>
       </div>
-      <div className="stat-box">
-        <span className="stat-value">{stats.totalPubs?.toLocaleString()}</span>
-        <span className="stat-label">Publicaciones (mes)</span>
+    </div>
+  );
+});
+
+// Bands are stored as excess-over-permitido; convert to the absolute % boundary they represent.
+function levelRangeLabel(level, bands, defaultThreshold, topScore) {
+  const absBands = bands.map((b) => defaultThreshold + (Number(b) || 0));
+  if (level === topScore || absBands.length === 0) return `> -${defaultThreshold}%`;
+  if (level === 1) return `> -${absBands[absBands.length - 1]}%`;
+  const i = topScore - 1 - level;
+  const lower = i === 0 ? defaultThreshold : absBands[i - 1];
+  const upper = absBands[i];
+  return `-${lower} a -${upper}%`;
+}
+
+const LevelDistributionChart = memo(function LevelDistributionChart({ levelDistribution, scoreConfig, maxScore }) {
+  if (!levelDistribution || levelDistribution.length === 0) return null;
+  const bands = scoreConfig?.bands ?? [5, 10, 15, 20, 25, 30];
+  const defaultThreshold = scoreConfig?.defaultThreshold ?? 15;
+  const topScore = bands.length + 2;
+  const data = levelDistribution
+    .filter((d) => d.pct > 0)
+    .map((d) => ({ ...d, name: levelRangeLabel(d.level, bands, defaultThreshold, topScore) }));
+
+  if (data.length === 0) return null;
+
+  // Rounded per-level percentages rarely add up to exactly 100 — scale them
+  // so the bar always fills the full width, while still showing the
+  // original rounded % in the labels.
+  const pctTotal = data.reduce((s, d) => s + d.pct, 0) || 1;
+
+  // Position each label at the horizontal center of its own segment (as a %
+  // of the bar's width), so it always sits directly over/under its level.
+  const segments = data.reduce((acc, d) => {
+    const width = (d.pct / pctTotal) * 100;
+    const cursor = acc.length > 0 ? acc[acc.length - 1].cursorEnd : 0;
+    const center = cursor + width / 2;
+    acc.push({ ...d, width, center, cursorEnd: cursor + width });
+    return acc;
+  }, []);
+
+  function anchorStyle(center) {
+    if (center < 8) return { left: 0, transform: "none", textAlign: "left" };
+    if (center > 92) return { right: 0, left: "auto", transform: "none", textAlign: "right" };
+    return { left: `${center}%`, transform: "translateX(-50%)", textAlign: "center" };
+  }
+
+  return (
+    <div className="chart-flex-fill" style={{ display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", width: "100%", height: 40, borderRadius: 6, overflow: "hidden", border: "1px solid var(--border)", flex: "none" }}>
+        {segments.map((s, i) => (
+          <div
+            key={s.level}
+            title={`${s.name} · ${s.pct}% · ${s.count} SKUs`}
+            style={{
+              flex: `0 0 ${s.width}%`,
+              background: scoreColor(s.level, maxScore),
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRight: i < segments.length - 1 ? "1px solid rgba(255,255,255,0.4)" : "none",
+            }}
+          >
+            {s.width >= 6 && (
+              <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>{s.pct}%</span>
+            )}
+          </div>
+        ))}
+      </div>
+      <div style={{ position: "relative", flex: 1, marginTop: 6, minHeight: 30 }}>
+        {segments.map((s) => (
+          <div key={s.level} style={{ position: "absolute", top: 0, whiteSpace: "nowrap", ...anchorStyle(s.center) }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, justifyContent: anchorStyle(s.center).textAlign === "right" ? "flex-end" : anchorStyle(s.center).textAlign === "left" ? "flex-start" : "center" }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: scoreColor(s.level, maxScore), flex: "none" }} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text)" }}>{s.name}</span>
+            </div>
+            <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{s.pct}% · {s.count} SKUs</div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -224,54 +302,6 @@ const DeviationPanel = memo(function DeviationPanel({ data, allDatesData, onSele
 
 
 
-const RotChart = memo(function RotChart({ data, maxScore }) {
-  const [metric, setMetric] = useState("avgScore");
-  const byScore = metric === "avgScore";
-  const maxVal = useMemo(() => Math.max(...data.map((d) => d[metric]), 1), [data, metric]);
-
-  return (
-    <>
-      <div className="chart-sort-btns">
-        <button className={`chart-sort-btn ${byScore ? "active" : ""}`} onClick={() => setMetric("avgScore")}>Score promedio</button>
-        <button className={`chart-sort-btn ${!byScore ? "active" : ""}`} onClick={() => setMetric("pctInfraccion")}>% desvío</button>
-      </div>
-      <div className="chart-flex-fill">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} layout="vertical" margin={{ top: 4, right: 48, left: 16, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e8" />
-            <XAxis type="number" domain={[0, byScore ? maxScore : maxVal]} tick={{ fontSize: 11 }}
-              tickFormatter={byScore ? undefined : (v) => `${v}%`} />
-            <YAxis type="category" dataKey="name" width={36} tick={{ fontSize: 13, fontWeight: 600 }} />
-            <Tooltip
-              {...getTooltipStyle()}
-              content={({ payload }) => {
-                if (!payload?.length) return null;
-                const d = payload[0].payload;
-                return (
-                  <div style={getTooltipStyle().contentStyle}>
-                    <p style={{ marginBottom: 4, fontWeight: 700 }}>Rotación {d.rot}</p>
-                    <p>Score promedio: {d.avgScore}</p>
-                    <p>% desvío: {d.pctInfraccion}%</p>
-                    <p>Publicaciones: {d.total}</p>
-                  </div>
-                );
-              }}
-            />
-            <Bar dataKey={metric} radius={[0, 4, 4, 0]} isAnimationActive={false}>
-              {data.map((entry, i) => (
-                <Cell key={i} fill={byScore ? scoreColor(entry.avgScore, maxScore) : (entry.pctInfraccion >= 50 ? "#ef4444" : entry.pctInfraccion >= 25 ? "#f97316" : "#eab308")} />
-              ))}
-              <LabelList dataKey={metric} position="insideRight"
-                style={{ fill: "#fff", fontSize: 12, fontWeight: 700 }}
-                formatter={byScore ? undefined : (v) => `${v}%`} />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </>
-  );
-});
-
 const TopRotosPie = memo(function TopRotosPie({ data, onSelectSku }) {
   const top5 = useMemo(
     () => [...data].sort((a, b) => b.count - a.count).slice(0, 5),
@@ -328,16 +358,66 @@ const TopRotosPie = memo(function TopRotosPie({ data, onSelectSku }) {
   );
 });
 
+const RotInfractionDonut = memo(function RotInfractionDonut({ data }) {
+  const colors = getPieColors();
+  return (
+    <div className="chart-flex-fill">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="pctInfraccion"
+            nameKey="rot"
+            cx="50%"
+            cy="46%"
+            innerRadius="45%"
+            outerRadius="70%"
+            isAnimationActive={false}
+            label={({ rot, pctInfraccion }) => `${rot} · ${pctInfraccion}%`}
+            labelLine={false}
+          >
+            {data.map((entry, i) => (
+              <Cell key={entry.rot} fill={colors[i % colors.length]} />
+            ))}
+          </Pie>
+          <Tooltip
+            {...getTooltipStyle()}
+            content={({ payload }) => {
+              if (!payload?.length) return null;
+              const d = payload[0].payload;
+              return (
+                <div style={getTooltipStyle().contentStyle}>
+                  <p style={{ marginBottom: 4, fontWeight: 700 }}>Rotación {d.rot}</p>
+                  <p>% desvío: {d.pctInfraccion}%</p>
+                  <p>Publicaciones: {d.total}</p>
+                </div>
+              );
+            }}
+          />
+          <Legend
+            verticalAlign="bottom"
+            height={40}
+            iconType="circle"
+            formatter={(_, entry) => `${entry.payload.rot} · ${entry.payload.pctInfraccion}%`}
+            wrapperStyle={{ fontSize: 11, color: "var(--text-muted)" }}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
+
 const CHART_LAYOUT_KEY = "pvp-dashboard:chart-layout";
 const GRID_COLS = 12;
 const ROW_HEIGHT = 30;
 const GRID_MARGIN = 16;
 
 const DEFAULT_CHART_LAYOUT = {
-  clientScore: { x: 0, y: 0, w: 6, h: 11 },
-  topRotos: { x: 6, y: 0, w: 6, h: 11 },
-  infractionAccounts: { x: 0, y: 11, w: 6, h: 12 },
-  rotChart: { x: 0, y: 23, w: 12, h: 6 },
+  levelDistribution: { x: 0, y: 0, w: 12, h: 4 },
+  clientScore: { x: 0, y: 4, w: 6, h: 11 },
+  topRotos: { x: 6, y: 4, w: 6, h: 11 },
+  infractionAccounts: { x: 0, y: 15, w: 6, h: 12 },
+  rotDonut: { x: 0, y: 27, w: 6, h: 10 },
 };
 
 function loadChartLayout() {
@@ -373,6 +453,11 @@ export default function Charts({ clients, allDatesClients, infractionChart, allD
   }
 
   const chartDefs = [
+    monthlySummary?.levelDistribution && monthlySummary.levelDistribution.some((d) => d.pct > 0) && {
+      id: "levelDistribution",
+      title: "% de SKUs por nivel",
+      content: <LevelDistributionChart levelDistribution={monthlySummary.levelDistribution} scoreConfig={scoreConfig} maxScore={maxScore} />,
+    },
     {
       id: "clientScore",
       title: "Score promedio por cliente",
@@ -389,9 +474,9 @@ export default function Charts({ clients, allDatesClients, infractionChart, allD
       content: <DeviationPanel data={infractionChart} allDatesData={allDatesInfractionChart} onSelect={handleSelect} threshold={deviationThreshold} />,
     },
     rotChart && rotChart.length > 0 && {
-      id: "rotChart",
-      title: "Score e infracciones por rotación",
-      content: <RotChart data={rotChart} maxScore={maxScore} />,
+      id: "rotDonut",
+      title: "% de quiebre por rotación",
+      content: <RotInfractionDonut data={rotChart} />,
     },
   ].filter(Boolean);
 
@@ -406,7 +491,7 @@ export default function Charts({ clients, allDatesClients, infractionChart, allD
       return { i: def.id, minW: 3, minH: 4, ...fallback };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedLayout, clients, skuDeviationChart, infractionChart, rotChart]);
+  }, [savedLayout, clients, skuDeviationChart, infractionChart, rotChart, monthlySummary]);
 
   function handleLayoutChange(newLayout) {
     setSavedLayout((prev) => {
