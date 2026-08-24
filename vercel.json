@@ -11,11 +11,17 @@
     "backend": {
       "root": "backend/",
       "framework": "fastapi",
-      "entrypoint": "main:app"
+      "entrypoint": "main:app",
+      "bindings": [
+        { "type": "service", "service": "blobapi", "format": "url", "env": "BLOBAPI_URL" }
+      ]
     },
     "blobapi": {
       "root": "blob-api/",
-      "framework": "node"
+      "framework": "node",
+      "bindings": [
+        { "type": "service", "service": "backend", "format": "url", "env": "BACKEND_URL" }
+      ]
     }
   },
   "rewrites": [
