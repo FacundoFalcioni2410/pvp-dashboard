@@ -1,0 +1,7 @@
+# The application is Turso-only; do not upload legacy local SQLite data.
+backend/data.db
+backend/datasets/
+
+# Python runtime artifacts
+**/__pycache__/
+**/*.py[cod]
