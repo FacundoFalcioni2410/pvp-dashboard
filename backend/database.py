@@ -20,7 +20,7 @@ TURSO_AUTH_TOKEN = os.getenv(
     "DATABASE_TURSO_AUTH_TOKEN", os.getenv("TURSO_AUTH_TOKEN", "")
 ).strip()
 PRIMARY_SHEET = "__rows__"
-INSERT_BATCH_SIZE = 500
+INSERT_BATCH_SIZE = 2000
 
 
 def get_catalog_conn():

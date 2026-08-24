@@ -185,7 +185,9 @@ def _ingest_workbook(contents: bytes, safe_filename: str) -> dict:
                 if not _has_pct_col(probe.columns):
                     continue
 
+                t0 = time.perf_counter()
                 sheet_df = xl.parse(sheet, header=header_row)
+                logger.info("upload [%s]: sheet '%s' full parse (%d rows) in %.2fs", safe_filename, sheet, len(sheet_df), time.perf_counter() - t0)
                 if len(sheet_df) > MAX_EXCEL_ROWS or len(sheet_df.columns) > MAX_EXCEL_COLUMNS:
                     raise ValueError("worksheet exceeds configured dimensions")
                 sheet_df.columns = [str(c).strip() for c in sheet_df.columns]
@@ -195,13 +197,24 @@ def _ingest_workbook(contents: bytes, safe_filename: str) -> dict:
                     match = [c for c in sheet_df.columns if c.lower() == PCT_DIF_COL.lower()]
                     if match:
                         sheet_df.rename(columns={match[0]: PCT_DIF_COL}, inplace=True)
+
+                t0 = time.perf_counter()
                 sheet_df["score"] = sheet_df[PCT_DIF_COL].apply(compute_score)
+                logger.info("upload [%s]: sheet '%s' score computed in %.2fs", safe_filename, sheet, time.perf_counter() - t0)
+
+                t0 = time.perf_counter()
                 for col in sheet_df.select_dtypes(include=["datetime", "datetimetz"]).columns:
                     sheet_df[col] = sheet_df[col].dt.strftime("%Y-%m-%d")
                 sheet_df = sheet_df.astype(str).replace("nan", None)
+                logger.info("upload [%s]: sheet '%s' stringified in %.2fs", safe_filename, sheet, time.perf_counter() - t0)
+
                 if first_sheet_df is None:
                     first_sheet_df = sheet_df
+
+                t0 = time.perf_counter()
                 populate_dataset_db(dataset_id, sheet_df, sheet)
+                logger.info("upload [%s]: sheet '%s' DB populate in %.2fs", safe_filename, sheet, time.perf_counter() - t0)
+
                 valid_sheets.append(sheet)
                 total_rows += len(sheet_df)
                 matched = True
