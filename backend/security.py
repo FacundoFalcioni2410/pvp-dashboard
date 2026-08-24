@@ -11,12 +11,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
+from config import positive_env_int
 from database import get_catalog_conn
 
 
 SESSION_COOKIE = "pvp_session"
 CSRF_COOKIE = "pvp_csrf"
-SESSION_HOURS = int(os.getenv("PVP_SESSION_HOURS", "8"))
+SESSION_HOURS = positive_env_int("PVP_SESSION_HOURS", 8)
 COOKIE_SECURE = os.getenv(
     "PVP_COOKIE_SECURE",
     "true" if (
