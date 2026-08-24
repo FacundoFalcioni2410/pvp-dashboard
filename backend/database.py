@@ -20,7 +20,7 @@ TURSO_AUTH_TOKEN = os.getenv(
     "DATABASE_TURSO_AUTH_TOKEN", os.getenv("TURSO_AUTH_TOKEN", "")
 ).strip()
 PRIMARY_SHEET = "__rows__"
-INSERT_BATCH_SIZE = 2000
+INSERT_BATCH_SIZE = 5000
 
 
 def get_catalog_conn():
@@ -211,11 +211,19 @@ def populate_dataset_db(dataset_id: int, df: pd.DataFrame, sheet_name: str | Non
             "DELETE FROM dataset_rows WHERE dataset_id = ? AND sheet_name = ?",
             (dataset_id, sheet_key),
         )
+        # executemany() still runs one INSERT statement per row on Turso's
+        # side even when pipelined into a single round-trip - for tens of
+        # thousands of rows that's tens of thousands of statement
+        # executions. A single multi-row VALUES clause per batch cuts that
+        # to one statement per batch instead.
         for offset in range(0, len(values), INSERT_BATCH_SIZE):
-            conn.executemany(
+            chunk = values[offset:offset + INSERT_BATCH_SIZE]
+            placeholders = ", ".join(["(?, ?, ?, ?, ?)"] * len(chunk))
+            flat_params = [param for row in chunk for param in row]
+            conn.execute(
                 "INSERT INTO dataset_rows "
-                "(dataset_id, sheet_name, row_number, row_date, row_json) VALUES (?, ?, ?, ?, ?)",
-                values[offset:offset + INSERT_BATCH_SIZE],
+                "(dataset_id, sheet_name, row_number, row_date, row_json) VALUES " + placeholders,
+                flat_params,
             )
         conn.commit()
     finally:
