@@ -55,6 +55,10 @@ const SummaryStats = memo(function SummaryStats({ monthlySummary }) {
         <span className="stat-label">SKUs</span>
       </div>
       <div className="stat-box">
+        <span className="stat-value">{stats.clientCount?.toLocaleString()}</span>
+        <span className="stat-label">Clientes</span>
+      </div>
+      <div className="stat-box">
         <span className="stat-value" style={{ color: stats.avgDeviation > 20 ? "#ef4444" : stats.avgDeviation > 10 ? "#f97316" : "#eab308" }}>
           {stats.avgDeviation}%
         </span>
@@ -82,7 +86,8 @@ const LevelDistributionChart = memo(function LevelDistributionChart({ levelDistr
   const topScore = bands.length + 2;
   const data = levelDistribution
     .filter((d) => d.pct > 0)
-    .map((d) => ({ ...d, name: levelRangeLabel(d.level, bands, defaultThreshold, topScore) }));
+    .map((d) => ({ ...d, name: levelRangeLabel(d.level, bands, defaultThreshold, topScore) }))
+    .sort((a, b) => b.level - a.level); // best level first (left) → worst last (right)
 
   if (data.length === 0) return null;
 
@@ -91,24 +96,19 @@ const LevelDistributionChart = memo(function LevelDistributionChart({ levelDistr
   // original rounded % in the labels.
   const pctTotal = data.reduce((s, d) => s + d.pct, 0) || 1;
 
-  // Position each label at the horizontal center of its own segment (as a %
-  // of the bar's width), so it always sits directly over/under its level.
+  // Each label sits at the exact point where its segment starts (not its
+  // center), so it always reads as "the level starting here" — starts are
+  // strictly increasing left to right, so labels never land on top of each
+  // other the way center-anchored ones could for a narrow middle segment.
   const segments = data.reduce((acc, d) => {
     const width = (d.pct / pctTotal) * 100;
-    const cursor = acc.length > 0 ? acc[acc.length - 1].cursorEnd : 0;
-    const center = cursor + width / 2;
-    acc.push({ ...d, width, center, cursorEnd: cursor + width });
+    const start = acc.length > 0 ? acc[acc.length - 1].cursorEnd : 0;
+    acc.push({ ...d, width, start, cursorEnd: start + width });
     return acc;
   }, []);
 
-  function anchorStyle(center) {
-    if (center < 8) return { left: 0, transform: "none", textAlign: "left" };
-    if (center > 92) return { right: 0, left: "auto", transform: "none", textAlign: "right" };
-    return { left: `${center}%`, transform: "translateX(-50%)", textAlign: "center" };
-  }
-
   return (
-    <div className="chart-flex-fill" style={{ display: "flex", flexDirection: "column" }}>
+    <div className="chart-flex-fill" style={{ display: "flex", flexDirection: "column", paddingRight: "32px" }}>
       <div style={{ display: "flex", width: "100%", height: 40, borderRadius: 6, overflow: "hidden", border: "1px solid var(--border)", flex: "none" }}>
         {segments.map((s, i) => (
           <div
@@ -129,10 +129,10 @@ const LevelDistributionChart = memo(function LevelDistributionChart({ levelDistr
           </div>
         ))}
       </div>
-      <div style={{ position: "relative", flex: 1, marginTop: 6, minHeight: 30 }}>
+      <div style={{ position: "relative", flex: 1, marginTop: 8, minHeight: 30 }}>
         {segments.map((s) => (
-          <div key={s.level} style={{ position: "absolute", top: 0, whiteSpace: "nowrap", ...anchorStyle(s.center) }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 5, justifyContent: anchorStyle(s.center).textAlign === "right" ? "flex-end" : anchorStyle(s.center).textAlign === "left" ? "flex-start" : "center" }}>
+          <div key={s.level} style={{ position: "absolute", top: 0, left: `${s.start}%`, whiteSpace: "nowrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: scoreColor(s.level, maxScore), flex: "none" }} />
               <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text)" }}>{s.name}</span>
             </div>

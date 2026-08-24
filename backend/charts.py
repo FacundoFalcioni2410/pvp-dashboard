@@ -286,8 +286,12 @@ def build_monthly_summary(rows: list[dict]) -> dict:
     deduped = _deduplicate_by_mla_day(rows)
     sku_pcts: dict[str, list[float]] = defaultdict(list)
     sku_scores: dict[str, list[int]] = defaultdict(list)
+    clients: set[str] = set()
     for row in deduped:
         sku = str(row.get(SKU_COL) or row.get(MLA_COL) or "").strip()
+        razon = (row.get(RAZON_SOCIAL_COL) or "").strip()
+        if razon:
+            clients.add(razon)
         if not sku:
             continue
         pct = normalise_pct(row.get(PCT_DIF_COL))
@@ -320,6 +324,7 @@ def build_monthly_summary(rows: list[dict]) -> dict:
 
     return {
         "skuCount": len(sku_pcts),
+        "clientCount": len(clients),
         "avgDeviation": avg_deviation,
         "levelDistribution": level_distribution,
     }
