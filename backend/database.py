@@ -31,10 +31,10 @@ def get_catalog_conn():
             "DATABASE_TURSO_AUTH_TOKEN."
         )
     try:
-        import libsql
+        import turso_serverless
     except ImportError as exc:
-        raise RuntimeError("Install the 'libsql' package to use Turso") from exc
-    return libsql.connect(database=TURSO_DATABASE_URL, auth_token=TURSO_AUTH_TOKEN)
+        raise RuntimeError("Install the 'turso_serverless' package to use Turso") from exc
+    return turso_serverless.connect(TURSO_DATABASE_URL, auth_token=TURSO_AUTH_TOKEN)
 
 
 def _dict_rows(cursor) -> list[dict]:
@@ -45,7 +45,7 @@ def _dict_rows(cursor) -> list[dict]:
 def ensure_catalog():
     conn = get_catalog_conn()
     try:
-        conn.execute("""
+        conn.executescript("""
             CREATE TABLE IF NOT EXISTS datasets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -53,25 +53,18 @@ def ensure_catalog():
                 created_at TEXT NOT NULL,
                 row_count INTEGER DEFAULT 0,
                 sheets TEXT DEFAULT '[]'
-            )
-        """)
-        try:
-            conn.execute("ALTER TABLE datasets ADD COLUMN sheets TEXT DEFAULT '[]'")
-        except Exception:
-            pass
-        conn.execute("""
+            );
+
             CREATE TABLE IF NOT EXISTS thresholds (
                 mla TEXT PRIMARY KEY,
                 allowed_pct REAL NOT NULL
-            )
-        """)
-        conn.execute("""
+            );
+
             CREATE TABLE IF NOT EXISTS score_config (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
-            )
-        """)
-        conn.execute("""
+            );
+
             CREATE TABLE IF NOT EXISTS dataset_rows (
                 dataset_id INTEGER NOT NULL,
                 sheet_name TEXT NOT NULL,
@@ -79,12 +72,11 @@ def ensure_catalog():
                 row_date TEXT,
                 row_json TEXT NOT NULL,
                 PRIMARY KEY (dataset_id, sheet_name, row_number)
-            )
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_dataset_rows_date
+            ON dataset_rows(dataset_id, sheet_name, row_date);
         """)
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_dataset_rows_date "
-            "ON dataset_rows(dataset_id, sheet_name, row_date)"
-        )
         conn.commit()
     finally:
         conn.close()

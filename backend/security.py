@@ -106,7 +106,7 @@ def verify_password(password: str, encoded: str) -> bool:
 def ensure_security_tables() -> None:
     conn = get_catalog_conn()
     try:
-        conn.execute("""
+        conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL,
@@ -116,18 +116,18 @@ def ensure_security_tables() -> None:
                 active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL,
                 password_changed_at TEXT NOT NULL
-            )
-        """)
-        conn.execute("""
+            );
+
             CREATE TABLE IF NOT EXISTS sessions (
                 token_hash TEXT PRIMARY KEY,
                 user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 csrf_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 expires_at TEXT NOT NULL
-            )
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
         """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
         conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (_iso(_utcnow()),))
         conn.commit()
     finally:

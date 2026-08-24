@@ -4,5 +4,5 @@ pandas
 openpyxl
 python-calamine
 python-multipart
-libsql
+turso_serverless
 python-dotenv
