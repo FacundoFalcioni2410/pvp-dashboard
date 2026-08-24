@@ -11,7 +11,8 @@
     "backend": {
       "root": "backend/",
       "framework": "fastapi",
-      "entrypoint": "main:app"
+      "entrypoint": "main:app",
+      "maxDuration": 800
     },
     "blobapi": {
       "root": "blob-api/",
