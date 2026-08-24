@@ -315,11 +315,15 @@ async def upload_excel_from_blob(payload: BlobUploadRequest, user: CsrfUser):
     safe_filename = re.sub(r"[^\w. -]", "_", safe_filename, flags=re.UNICODE)[:150]
     if Path(safe_filename).suffix.lower() not in {".xlsx", ".xls"}:
         raise HTTPException(status_code=400, detail="Only .xlsx / .xls files are accepted")
-    if not re.match(r"^https://[a-z0-9]+\.public\.blob\.vercel-storage\.com/", payload.blob_url):
+    if not re.match(r"^https://[a-z0-9]+\.private\.blob\.vercel-storage\.com/", payload.blob_url):
         raise HTTPException(status_code=400, detail="Invalid blob URL")
 
+    token = os.getenv("BLOB_READ_WRITE_TOKEN", "")
     try:
-        with httpx.stream("GET", payload.blob_url, timeout=60) as resp:
+        with httpx.stream(
+            "GET", payload.blob_url, timeout=60,
+            headers={"authorization": f"Bearer {token}"} if token else {},
+        ) as resp:
             resp.raise_for_status()
             chunks = []
             total = 0

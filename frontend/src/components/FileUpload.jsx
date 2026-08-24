@@ -22,7 +22,7 @@ export default function FileUpload({ onData }) {
 
   async function uploadViaBlob(file) {
     const blob = await blobUpload(file.name, file, {
-      access: "public",
+      access: "private",
       handleUploadUrl: `${API_BASE_URL}/blob/upload`,
     });
     return apiFetch("/upload-from-blob", {
