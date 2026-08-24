@@ -8,25 +8,33 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 
-from database import ensure_catalog, migrate_legacy_if_needed
+from database import ensure_catalog
 from router_data import router as data_router
 from router_datasets import router as datasets_router
 from router_score import router as score_router
 from router_thresholds import router as thresholds_router
 from security import ensure_security_tables, router as auth_router
 from config import MAX_UPLOAD_BYTES
+from seed_user import seed_default_user
 
-is_production = os.getenv("PVP_ENV", "development").lower() == "production"
-allowed_origins = [
-    value.strip() for value in os.getenv(
-        "PVP_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
-    ).split(",") if value.strip()
+is_vercel = os.getenv("VERCEL", "").lower() == "1"
+is_production = is_vercel or os.getenv("PVP_ENV", "development").lower() == "production"
+vercel_hosts = [
+    os.getenv("VERCEL_URL", "").strip(),
+    os.getenv("VERCEL_PROJECT_PRODUCTION_URL", "").strip(),
 ]
+default_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+default_origins.extend(f"https://{host}" for host in vercel_hosts if host)
+allowed_origins = [
+    value.strip() for value in os.getenv("PVP_ALLOWED_ORIGINS", ",".join(default_origins)).split(",")
+    if value.strip()
+]
+default_hosts = ["localhost", "127.0.0.1", "testserver", *(host for host in vercel_hosts if host)]
 allowed_hosts = [
-    value.strip() for value in os.getenv(
-        "PVP_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver"
-    ).split(",") if value.strip()
+    value.strip() for value in os.getenv("PVP_ALLOWED_HOSTS", ",".join(default_hosts)).split(",")
+    if value.strip()
 ]
 
 app = FastAPI(
@@ -37,6 +45,7 @@ app = FastAPI(
 )
 
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
     CORSMiddleware,
@@ -68,26 +77,26 @@ async def security_headers(request: Request, call_next):
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
-    if request.url.path != "/health":
+    if request.url.path != "/api/health":
         response.headers["Cache-Control"] = "no-store"
     if is_production:
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     return response
 
-app.include_router(auth_router)
-app.include_router(data_router)
-app.include_router(datasets_router)
-app.include_router(score_router)
-app.include_router(thresholds_router)
+app.include_router(auth_router, prefix="/api")
+app.include_router(data_router, prefix="/api")
+app.include_router(datasets_router, prefix="/api")
+app.include_router(score_router, prefix="/api")
+app.include_router(thresholds_router, prefix="/api")
 
 
 @app.on_event("startup")
 def startup():
     ensure_catalog()
     ensure_security_tables()
-    migrate_legacy_if_needed()
+    seed_default_user()
 
 
-@app.get("/health")
+@app.get("/api/health")
 def health():
     return {"status": "ok"}

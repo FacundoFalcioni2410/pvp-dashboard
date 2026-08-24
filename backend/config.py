@@ -1,4 +1,3 @@
-from pathlib import Path
 import os
 
 PCT_DIF_COL = "% Dif con PVP"
@@ -15,13 +14,9 @@ CANAL_COL = "CANAL"
 MACRO_FAMILIA_COL = "MACROFAMILIA"
 MARCA_COL = "MARCA"
 
-BACKEND_DIR = Path(__file__).parent
-DATASETS_DIR = BACKEND_DIR / "datasets"
-CATALOG_PATH = DATASETS_DIR / "catalog.db"
-LEGACY_DB_PATH = BACKEND_DIR / "data.db"
-
 DEFAULT_THRESHOLD = 15.0
-MAX_UPLOAD_BYTES = int(os.getenv("PVP_MAX_UPLOAD_MB", "25")) * 1024 * 1024
+DEFAULT_UPLOAD_MB = "4" if os.getenv("VERCEL", "").lower() == "1" else "25"
+MAX_UPLOAD_BYTES = int(os.getenv("PVP_MAX_UPLOAD_MB", DEFAULT_UPLOAD_MB)) * 1024 * 1024
 MAX_EXCEL_UNCOMPRESSED_BYTES = int(os.getenv("PVP_MAX_EXCEL_UNCOMPRESSED_MB", "200")) * 1024 * 1024
 MAX_EXCEL_SHEETS = 50
 MAX_EXCEL_ROWS = 500_000

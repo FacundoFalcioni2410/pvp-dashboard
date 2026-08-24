@@ -3,7 +3,6 @@ import hmac
 import logging
 import os
 import secrets
-import sqlite3
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
@@ -12,7 +11,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from config import CATALOG_PATH
+from database import get_catalog_conn
 
 
 SESSION_COOKIE = "pvp_session"
@@ -20,7 +19,10 @@ CSRF_COOKIE = "pvp_csrf"
 SESSION_HOURS = int(os.getenv("PVP_SESSION_HOURS", "8"))
 COOKIE_SECURE = os.getenv(
     "PVP_COOKIE_SECURE",
-    "true" if os.getenv("PVP_ENV", "development").lower() == "production" else "false",
+    "true" if (
+        os.getenv("PVP_ENV", "development").lower() == "production"
+        or os.getenv("VERCEL", "").lower() == "1"
+    ) else "false",
 ).lower() in {"1", "true", "yes"}
 PASSWORD_MIN_LENGTH = 14
 SCRYPT_N = 2**15
@@ -102,7 +104,7 @@ def verify_password(password: str, encoded: str) -> bool:
 
 
 def ensure_security_tables() -> None:
-    conn = sqlite3.connect(CATALOG_PATH)
+    conn = get_catalog_conn()
     try:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -139,7 +141,7 @@ def create_user(username: str, password: str, replace: bool = False) -> None:
         raise ValueError("Username must contain between 1 and 64 characters")
     password_hash = hash_password(password)
     now = _iso(_utcnow())
-    conn = sqlite3.connect(CATALOG_PATH)
+    conn = get_catalog_conn()
     try:
         existing = conn.execute(
             "SELECT id FROM users WHERE normalized_username = ?", (normalized,)
@@ -163,8 +165,43 @@ def create_user(username: str, password: str, replace: bool = False) -> None:
         conn.close()
 
 
+def seed_user_with_hash(username: str, password_hash: str) -> bool:
+    """Create one user without ever placing its plaintext password in source control."""
+    display_name = username.strip()
+    normalized = normalize_username(username)
+    if not normalized or len(display_name) > 64:
+        raise ValueError("Username must contain between 1 and 64 characters")
+    try:
+        algorithm, n, r, p, salt, derived = password_hash.split("$", 5)
+        valid_hash = (
+            algorithm == "scrypt"
+            and (int(n), int(r), int(p)) == (SCRYPT_N, SCRYPT_R, SCRYPT_P)
+            and len(bytes.fromhex(salt)) == 16
+            and len(bytes.fromhex(derived)) == 32
+        )
+    except (ValueError, TypeError):
+        valid_hash = False
+    if not valid_hash:
+        raise ValueError("Invalid password hash")
+
+    now = _iso(_utcnow())
+    conn = get_catalog_conn()
+    try:
+        cursor = conn.execute(
+            "INSERT OR IGNORE INTO users "
+            "(username, normalized_username, password_hash, role, active, created_at, password_changed_at) "
+            "VALUES (?, ?, ?, 'admin', 1, ?, ?) RETURNING id",
+            (display_name, normalized, password_hash, now, now),
+        )
+        created = cursor.fetchone() is not None
+        conn.commit()
+        return created
+    finally:
+        conn.close()
+
+
 def user_count() -> int:
-    conn = sqlite3.connect(CATALOG_PATH)
+    conn = get_catalog_conn()
     try:
         return conn.execute("SELECT COUNT(*) FROM users WHERE active = 1").fetchone()[0]
     finally:
@@ -206,20 +243,21 @@ def get_current_user(request: Request) -> dict:
     token = request.cookies.get(SESSION_COOKIE)
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
-    conn = sqlite3.connect(CATALOG_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_catalog_conn()
     try:
-        row = conn.execute(
+        cursor = conn.execute(
             "SELECT u.id, u.username, u.role, u.active, s.csrf_hash, s.expires_at "
             "FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?",
             (_token_hash(token),),
-        ).fetchone()
+        )
+        raw = cursor.fetchone()
+        row = dict(zip((column[0] for column in cursor.description), raw)) if raw else None
         if not row or not row["active"] or row["expires_at"] <= _iso(_utcnow()):
             if row:
                 conn.execute("DELETE FROM sessions WHERE token_hash = ?", (_token_hash(token),))
                 conn.commit()
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired")
-        return dict(row)
+        return row
     finally:
         conn.close()
 
@@ -248,13 +286,14 @@ def login(payload: LoginRequest, request: Request, response: Response):
     keys = _client_keys(request, payload.username)
     for key in keys:
         _check_rate_limit(key)
-    conn = sqlite3.connect(CATALOG_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_catalog_conn()
     try:
-        user = conn.execute(
+        cursor = conn.execute(
             "SELECT id, username, role, password_hash, active FROM users WHERE normalized_username = ?",
             (normalize_username(payload.username),),
-        ).fetchone()
+        )
+        raw = cursor.fetchone()
+        user = dict(zip((column[0] for column in cursor.description), raw)) if raw else None
         if _dummy_password_hash is None:
             _dummy_password_hash = hash_password("Invalid-Account-Password-9284!")
         valid = verify_password(payload.password, user["password_hash"] if user else _dummy_password_hash)
@@ -291,7 +330,7 @@ def me(user: CurrentUser):
 @router.post("/logout")
 def logout(request: Request, response: Response, user: CsrfUser):
     token = request.cookies.get(SESSION_COOKIE, "")
-    conn = sqlite3.connect(CATALOG_PATH)
+    conn = get_catalog_conn()
     try:
         conn.execute("DELETE FROM sessions WHERE token_hash = ?", (_token_hash(token),))
         conn.commit()
@@ -307,7 +346,7 @@ def change_password(payload: PasswordChangeRequest, request: Request, response: 
         validate_password(payload.new_password)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    conn = sqlite3.connect(CATALOG_PATH)
+    conn = get_catalog_conn()
     try:
         row = conn.execute("SELECT password_hash FROM users WHERE id = ?", (user["id"],)).fetchone()
         if not row or not verify_password(payload.current_password, row[0]):

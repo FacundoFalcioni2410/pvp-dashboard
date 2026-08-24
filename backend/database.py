@@ -1,74 +1,139 @@
 import json
-import hashlib
-import shutil
-import sqlite3
-from datetime import datetime
+import os
+from datetime import datetime, timezone
+from pathlib import Path
 
 import pandas as pd
+from dotenv import load_dotenv
 
-from config import CATALOG_PATH, DATASETS_DIR, FECHA_COL, LEGACY_DB_PATH
+# Local development keeps secrets beside the backend. In Vercel, existing
+# environment variables win because python-dotenv does not override them.
+load_dotenv(Path(__file__).resolve().with_name(".env"))
+
+from config import FECHA_COL
+
+
+TURSO_DATABASE_URL = os.getenv(
+    "DATABASE_TURSO_DATABASE_URL", os.getenv("TURSO_DATABASE_URL", "")
+).strip()
+TURSO_AUTH_TOKEN = os.getenv(
+    "DATABASE_TURSO_AUTH_TOKEN", os.getenv("TURSO_AUTH_TOKEN", "")
+).strip()
+PRIMARY_SHEET = "__rows__"
+INSERT_BATCH_SIZE = 500
+
+
+def get_catalog_conn():
+    """Return the remote Turso DB-API connection used in every environment."""
+    if not TURSO_DATABASE_URL or not TURSO_AUTH_TOKEN:
+        raise RuntimeError(
+            "Turso is required. Set DATABASE_TURSO_DATABASE_URL and "
+            "DATABASE_TURSO_AUTH_TOKEN."
+        )
+    try:
+        import libsql
+    except ImportError as exc:
+        raise RuntimeError("Install the 'libsql' package to use Turso") from exc
+    return libsql.connect(database=TURSO_DATABASE_URL, auth_token=TURSO_AUTH_TOKEN)
+
+
+def _dict_rows(cursor) -> list[dict]:
+    columns = [description[0] for description in cursor.description]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
 
 def ensure_catalog():
-    DATASETS_DIR.mkdir(exist_ok=True)
-    conn = sqlite3.connect(CATALOG_PATH)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS datasets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            filename TEXT,
-            created_at TEXT NOT NULL,
-            row_count INTEGER DEFAULT 0,
-            sheets TEXT DEFAULT '[]'
-        )
-    """)
+    conn = get_catalog_conn()
     try:
-        conn.execute("ALTER TABLE datasets ADD COLUMN sheets TEXT DEFAULT '[]'")
-    except sqlite3.OperationalError:
-        pass
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS thresholds (
-            mla TEXT PRIMARY KEY,
-            allowed_pct REAL NOT NULL
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS datasets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                filename TEXT,
+                created_at TEXT NOT NULL,
+                row_count INTEGER DEFAULT 0,
+                sheets TEXT DEFAULT '[]'
+            )
+        """)
+        try:
+            conn.execute("ALTER TABLE datasets ADD COLUMN sheets TEXT DEFAULT '[]'")
+        except Exception:
+            pass
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS thresholds (
+                mla TEXT PRIMARY KEY,
+                allowed_pct REAL NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS score_config (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS dataset_rows (
+                dataset_id INTEGER NOT NULL,
+                sheet_name TEXT NOT NULL,
+                row_number INTEGER NOT NULL,
+                row_date TEXT,
+                row_json TEXT NOT NULL,
+                PRIMARY KEY (dataset_id, sheet_name, row_number)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_dataset_rows_date "
+            "ON dataset_rows(dataset_id, sheet_name, row_date)"
         )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS score_config (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-
-def get_catalog_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(CATALOG_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
+        conn.commit()
+    finally:
+        conn.close()
 
 def list_datasets_from_catalog() -> list[dict]:
     conn = get_catalog_conn()
     try:
-        rows = conn.execute(
-            "SELECT id, name, filename, created_at, row_count, sheets FROM datasets ORDER BY created_at DESC"
-        ).fetchall()
-        return [dict(r) for r in rows]
+        cursor = conn.execute(
+            "SELECT id, name, filename, created_at, row_count, sheets "
+            "FROM datasets ORDER BY created_at DESC"
+        )
+        return _dict_rows(cursor)
     finally:
         conn.close()
 
 
-def create_dataset_in_catalog(name: str, filename: str, row_count: int, sheets: list[str] = None) -> int:
+def create_dataset_in_catalog(
+    name: str, filename: str, row_count: int, sheets: list[str] | None = None
+) -> int:
     conn = get_catalog_conn()
     try:
-        cur = conn.execute(
-            "INSERT INTO datasets (name, filename, created_at, row_count, sheets) VALUES (?, ?, ?, ?, ?)",
-            (name, filename, datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S"), row_count, json.dumps(sheets or [])),
+        cursor = conn.execute(
+            "INSERT INTO datasets (name, filename, created_at, row_count, sheets) "
+            "VALUES (?, ?, ?, ?, ?) RETURNING id",
+            (
+                name,
+                filename,
+                datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                row_count,
+                json.dumps(sheets or []),
+            ),
         )
-        dataset_id = cur.lastrowid
+        row = cursor.fetchone()
+        if not row:
+            raise RuntimeError("Database did not return the new dataset id")
         conn.commit()
-        return dataset_id
+        return int(row[0])
+    finally:
+        conn.close()
+
+
+def update_dataset_in_catalog(dataset_id: int, row_count: int, sheets: list[str]) -> None:
+    conn = get_catalog_conn()
+    try:
+        conn.execute(
+            "UPDATE datasets SET sheets = ?, row_count = ? WHERE id = ?",
+            (json.dumps(sheets), row_count, dataset_id),
+        )
+        conn.commit()
     finally:
         conn.close()
 
@@ -76,20 +141,18 @@ def create_dataset_in_catalog(name: str, filename: str, row_count: int, sheets: 
 def delete_dataset_from_catalog(dataset_id: int):
     conn = get_catalog_conn()
     try:
+        conn.execute("DELETE FROM dataset_rows WHERE dataset_id = ?", (dataset_id,))
         conn.execute("DELETE FROM datasets WHERE id = ?", (dataset_id,))
         conn.commit()
     finally:
         conn.close()
-    db_path = DATASETS_DIR / f"{dataset_id}.db"
-    if db_path.exists():
-        db_path.unlink()
 
 
 def get_thresholds() -> dict[str, float]:
     conn = get_catalog_conn()
     try:
         rows = conn.execute("SELECT mla, allowed_pct FROM thresholds").fetchall()
-        return {r[0]: r[1] for r in rows}
+        return {str(row[0]): float(row[1]) for row in rows}
     finally:
         conn.close()
 
@@ -97,7 +160,7 @@ def get_thresholds() -> dict[str, float]:
 def get_threshold_count() -> int:
     conn = get_catalog_conn()
     try:
-        return conn.execute("SELECT COUNT(*) FROM thresholds").fetchone()[0]
+        return int(conn.execute("SELECT COUNT(*) FROM thresholds").fetchone()[0])
     finally:
         conn.close()
 
@@ -111,7 +174,7 @@ def upsert_thresholds(entries: list[tuple[str, float]]) -> int:
             entries,
         )
         conn.commit()
-        return conn.execute("SELECT COUNT(*) FROM thresholds").fetchone()[0]
+        return int(conn.execute("SELECT COUNT(*) FROM thresholds").fetchone()[0])
     finally:
         conn.close()
 
@@ -121,88 +184,81 @@ def delete_thresholds() -> int:
     try:
         conn.execute("DELETE FROM thresholds")
         conn.commit()
-        return conn.execute("SELECT COUNT(*) FROM thresholds").fetchone()[0]
+        return int(conn.execute("SELECT COUNT(*) FROM thresholds").fetchone()[0])
     finally:
         conn.close()
 
 
-def get_dataset_conn(dataset_id: int) -> sqlite3.Connection:
-    db_path = DATASETS_DIR / f"{dataset_id}.db"
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def populate_dataset_db(dataset_id: int, df: pd.DataFrame, sheet_name: str = None) -> None:
-    conn = get_dataset_conn(dataset_id)
-    try:
-        if sheet_name:
-            # Spreadsheet-controlled sheet names must never become SQL identifiers.
-            suffix = hashlib.sha256(sheet_name.encode("utf-8")).hexdigest()[:16]
-            table_name = f"sheet_{suffix}"
-            conn.execute(f'DROP TABLE IF EXISTS "{table_name}"')
-            col_defs = ", ".join(f'"{str(c).replace(chr(34), chr(34) * 2)}" TEXT' for c in df.columns)
-            conn.execute(f'CREATE TABLE "{table_name}" ({col_defs})')
-            if FECHA_COL in df.columns:
-                conn.execute(f'CREATE INDEX IF NOT EXISTS "idx_fecha_{suffix}" ON "{table_name}" ("{FECHA_COL}")')
-            df.to_sql(table_name, conn, if_exists="append", index=False)
+def _serializable_record(record: dict) -> dict:
+    clean = {}
+    for key, value in record.items():
+        if value is None or (not isinstance(value, (str, bytes)) and pd.isna(value)):
+            clean[str(key)] = None
         else:
-            conn.execute("DROP TABLE IF EXISTS rows")
-            col_defs = ", ".join(f'"{str(c).replace(chr(34), chr(34) * 2)}" TEXT' for c in df.columns)
-            conn.execute(f"CREATE TABLE rows ({col_defs})")
-            conn.execute(f'CREATE INDEX idx_fecha ON rows ("{FECHA_COL}")')
-            df.to_sql("rows", conn, if_exists="append", index=False)
+            clean[str(key)] = value if isinstance(value, (str, int, float, bool)) else str(value)
+    return clean
+
+
+def populate_dataset_db(dataset_id: int, df: pd.DataFrame, sheet_name: str | None = None) -> None:
+    sheet_key = sheet_name or PRIMARY_SHEET
+    records = [_serializable_record(record) for record in df.to_dict(orient="records")]
+    values = [
+        (
+            dataset_id,
+            sheet_key,
+            index,
+            str(record.get(FECHA_COL) or "")[:10] or None,
+            json.dumps(record, ensure_ascii=False, separators=(",", ":")),
+        )
+        for index, record in enumerate(records)
+    ]
+
+    conn = get_catalog_conn()
+    try:
+        conn.execute(
+            "DELETE FROM dataset_rows WHERE dataset_id = ? AND sheet_name = ?",
+            (dataset_id, sheet_key),
+        )
+        for offset in range(0, len(values), INSERT_BATCH_SIZE):
+            conn.executemany(
+                "INSERT INTO dataset_rows "
+                "(dataset_id, sheet_name, row_number, row_date, row_json) VALUES (?, ?, ?, ?, ?)",
+                values[offset:offset + INSERT_BATCH_SIZE],
+            )
         conn.commit()
     finally:
         conn.close()
 
 
 def query_dataset_rows(dataset_id: int, date: str | None) -> list[dict]:
-    conn = get_dataset_conn(dataset_id)
+    conn = get_catalog_conn()
     try:
         if date:
-            cur = conn.execute(
-                f'SELECT * FROM rows WHERE substr("{FECHA_COL}", 1, 10) = ?', (date,)
-            )
+            rows = conn.execute(
+                "SELECT row_json FROM dataset_rows "
+                "WHERE dataset_id = ? AND sheet_name = ? AND row_date = ? ORDER BY row_number",
+                (dataset_id, PRIMARY_SHEET, date),
+            ).fetchall()
         else:
-            cur = conn.execute("SELECT * FROM rows")
-        cols = [d[0] for d in cur.description]
-        return [dict(zip(cols, row)) for row in cur.fetchall()]
+            rows = conn.execute(
+                "SELECT row_json FROM dataset_rows "
+                "WHERE dataset_id = ? AND sheet_name = ? ORDER BY row_number",
+                (dataset_id, PRIMARY_SHEET),
+            ).fetchall()
+        return [json.loads(row[0]) for row in rows]
     finally:
         conn.close()
 
 
 def query_dataset_dates(dataset_id: int) -> list[str]:
-    conn = get_dataset_conn(dataset_id)
+    conn = get_catalog_conn()
     try:
-        cur = conn.execute(
-            f'SELECT DISTINCT substr("{FECHA_COL}", 1, 10) AS d FROM rows '
-            f'WHERE "{FECHA_COL}" IS NOT NULL ORDER BY d DESC'
-        )
-        return [r[0] for r in cur.fetchall() if r[0]]
-    except Exception:
-        return []
+        rows = conn.execute(
+            "SELECT DISTINCT row_date FROM dataset_rows "
+            "WHERE dataset_id = ? AND sheet_name = ? AND row_date IS NOT NULL "
+            "ORDER BY row_date DESC",
+            (dataset_id, PRIMARY_SHEET),
+        ).fetchall()
+        return [str(row[0]) for row in rows if row[0]]
     finally:
         conn.close()
-
-
-def migrate_legacy_if_needed():
-    if not LEGACY_DB_PATH.exists():
-        return
-    if list_datasets_from_catalog():
-        return
-    try:
-        old_conn = sqlite3.connect(LEGACY_DB_PATH)
-        try:
-            row_count = old_conn.execute("SELECT COUNT(*) FROM rows").fetchone()[0]
-        except Exception:
-            old_conn.close()
-            return
-        if row_count == 0:
-            old_conn.close()
-            return
-        old_conn.close()
-        dataset_id = create_dataset_in_catalog("Datos importados", "data.db", row_count)
-        shutil.copy2(LEGACY_DB_PATH, DATASETS_DIR / f"{dataset_id}.db")
-    except Exception:
-        pass

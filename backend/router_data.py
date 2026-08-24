@@ -19,12 +19,11 @@ from config import (
 from database import (
     create_dataset_in_catalog,
     delete_dataset_from_catalog,
-    get_catalog_conn,
-    get_dataset_conn,
     list_datasets_from_catalog,
     populate_dataset_db,
     query_dataset_dates,
     query_dataset_rows,
+    update_dataset_in_catalog,
 )
 from filters import apply_global_filters, build_filter_options, build_response, filter_by_sku
 from scoring import compute_score, enrich_rows
@@ -122,7 +121,8 @@ def get_data(
     body["dates"] = dates
     body["selectedDate"] = resolved_date
     body["activeDatasetId"] = dataset_id
-    body["sheets"] = json.loads(datasets[0].get("sheets", "[]"))
+    selected_dataset = next(dataset for dataset in datasets if dataset["id"] == dataset_id)
+    body["sheets"] = json.loads(selected_dataset.get("sheets", "[]"))
     return Response(content=json.dumps(body, ensure_ascii=False), media_type="application/json")
 
 
@@ -233,15 +233,7 @@ async def upload_excel(user: CsrfUser, file: UploadFile = File(...)):
         safe_filename, len(valid_sheets), total_rows, t_sheets_populated - t_parsed,
     )
 
-    conn = get_catalog_conn()
-    try:
-        conn.execute(
-            "UPDATE datasets SET sheets = ?, row_count = ? WHERE id = ?",
-            (json.dumps(valid_sheets), total_rows, dataset_id),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    update_dataset_in_catalog(dataset_id, total_rows, valid_sheets)
 
     if first_sheet_df is not None:
         populate_dataset_db(dataset_id, first_sheet_df, None)
@@ -297,14 +289,7 @@ def compare_data(
         raise HTTPException(status_code=400, detail="Provide 'client' or 'sku' parameter")
 
     def get_all_rows(dataset_id: int) -> list[dict]:
-        conn = get_dataset_conn(dataset_id)
-        try:
-            cur = conn.execute("SELECT * FROM rows")
-            cols = [d[0] for d in cur.description]
-            rows = [dict(zip(cols, row)) for row in cur.fetchall()]
-            return enrich_rows(rows)
-        finally:
-            conn.close()
+        return enrich_rows(query_dataset_rows(dataset_id, None))
 
     def avg_pct_by_group(rows, group_col, filter_col, filter_val):
         groups = defaultdict(list)

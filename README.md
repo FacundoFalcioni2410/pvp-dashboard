@@ -67,16 +67,31 @@ También podés instalar todo una sola vez desde la raíz:
 npm run setup
 ```
 
+La aplicación usa Turso en todos los entornos. Para desarrollo local, copiá `.env.example` a `.env` y completá:
+
+```env
+DATABASE_TURSO_DATABASE_URL=libsql://tu-base.turso.io
+DATABASE_TURSO_AUTH_TOKEN=tu-token-secreto
+```
+
 
 
 ---
 
-## 4. Crear el usuario administrador
+## 4. Usuario administrador y arranque inicial
 
-La aplicación arranca cerrada y no incluye contraseñas por defecto. Antes del primer ingreso, creá el administrador. El comando solicita la contraseña de forma oculta y exige al menos 14 caracteres y tres tipos de caracteres:
+En el primer arranque, la API crea las tablas de Turso y el usuario `admin` automáticamente. El seeder es idempotente: los siguientes arranques o despliegues no cambian una cuenta existente.
+
+También podés crear otro administrador manualmente. El comando solicita la contraseña de forma oculta y exige al menos 14 caracteres y tres tipos de caracteres:
 
 ```bash
 npm run create-user
+```
+
+Para ejecutar manualmente el mismo seeder idempotente:
+
+```bash
+npm run seed-user
 ```
 
 Para restablecerla desde la terminal y cerrar todas las sesiones existentes:
@@ -106,6 +121,13 @@ Abrí el navegador en **http://localhost:5173**.
 
 Para detenerlo: `Ctrl + C`
 
+### Desplegar en Vercel
+
+1. En **Build and Deployment**, seleccioná **Services** como framework del proyecto.
+2. Confirmá que estén definidas para Production y Preview las variables `DATABASE_TURSO_DATABASE_URL` y `DATABASE_TURSO_AUTH_TOKEN`.
+3. Desplegá normalmente. Vercel instala por separado las dependencias de `frontend/` y `backend/`; al iniciar la API se crean el esquema y el usuario inicial si todavía no existen.
+4. Si usás un dominio personalizado, agregá `PVP_ALLOWED_ORIGINS=https://tu-dominio` y `PVP_ALLOWED_HOSTS=tu-dominio`.
+
 ---
 
 ## 6. Uso
@@ -125,6 +147,8 @@ Para detenerlo: `Ctrl + C`
 - En producción, serví exclusivamente por HTTPS y configurá las variables de [`.env.example`](.env.example) en el entorno del proceso. No uses Vite como servidor público.
 - El proxy/TLS que sirva el build estático debe agregar también la política CSP incluida en `frontend/vite.config.js`.
 - `backend/*.db` está ignorado para evitar nuevos commits de datos. Si un archivo de datos ya estuvo versionado, retiralo también del historial del repositorio antes de publicarlo.
+- Turso es obligatorio: usuarios, sesiones, configuración y filas importadas se guardan en la misma base remota mediante `DATABASE_TURSO_DATABASE_URL` y `DATABASE_TURSO_AUTH_TOKEN`.
+- Vercel limita cada request y response de Functions a 4,5 MB; en Vercel la aplicación limita los Excel a 4 MB y comprime las respuestas JSON. Para archivos o respuestas mayores hace falta dividir/paginar el flujo.
 
 ---
 
