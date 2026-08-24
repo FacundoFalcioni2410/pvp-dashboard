@@ -1,4 +1,7 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
+const configuredApiUrl = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const API_BASE_URL = configuredApiUrl
+  ? (configuredApiUrl.endsWith("/api") ? configuredApiUrl : `${configuredApiUrl}/api`)
+  : "/api";
 
 function readCookie(name) {
   const prefix = `${encodeURIComponent(name)}=`;
@@ -15,7 +18,7 @@ function csrfHeaders(method) {
 export async function apiFetch(url, options = {}) {
   const response = await fetch(`${API_BASE_URL}${url}`, {
     ...options,
-    credentials: "same-origin",
+    credentials: "include",
     headers: { ...csrfHeaders(options.method), ...(options.headers || {}) },
   });
   if (response.status === 401) window.dispatchEvent(new Event("pvp:unauthorized"));
