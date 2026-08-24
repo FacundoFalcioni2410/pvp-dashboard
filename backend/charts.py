@@ -3,7 +3,7 @@ import random
 from collections import defaultdict
 
 from config import (
-    CANAL_COL, FECHA_COL, MACRO_FAMILIA_COL, MLA_COL,
+    CANAL_COL, DEFAULT_THRESHOLD, FECHA_COL, MACRO_FAMILIA_COL, MLA_COL,
     PCT_DIF_COL, RAZON_SOCIAL_COL, ROT_COL, SKU_COL,
     TIPO_CLIENTE_COL, USUARIO_ML_COL,
 )
@@ -218,14 +218,14 @@ def build_sku_deviation_chart(rows: list[dict]) -> list:
     return results[:20]
 
 
-def build_rot_chart(rows: list[dict]) -> list:
-    top = _top_score()
+def build_rot_chart(rows: list[dict], threshold: float = DEFAULT_THRESHOLD) -> list:
     rmap = defaultdict(lambda: {"scores": [], "infraction_count": 0, "total": 0})
     for row in rows:
         rot = (row.get(ROT_COL) or "").strip().upper()
         if not rot:
             continue
         score = row.get("score")
+        pct = normalise_pct(row.get(PCT_DIF_COL))
         rmap[rot]["total"] += 1
         if score is not None:
             try:
@@ -234,8 +234,8 @@ def build_rot_chart(rows: list[dict]) -> list:
                 score_num = None
             if score_num is not None:
                 rmap[rot]["scores"].append(score_num)
-                if 0 < score_num < top:
-                    rmap[rot]["infraction_count"] += 1
+        if pct is not None and abs(pct) >= threshold:
+            rmap[rot]["infraction_count"] += 1
     results = []
     for rot, d in rmap.items():
         scores = d["scores"]
