@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useDashboard } from "../context/DashboardContext";
+import { apiFetch } from "../api";
 
 export default function CompareView({ client, sku, onSelectItem }) {
   const { activeDatasetId, datasets } = useDashboard();
@@ -22,7 +23,7 @@ export default function CompareView({ client, sku, onSelectItem }) {
       if (client) params.set("client", client);
       if (sku) params.set("sku", sku);
       
-      const res = await fetch(`/compare?${params}`);
+      const res = await apiFetch(`/compare?${params}`);
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const result = await res.json();
       setData(result);

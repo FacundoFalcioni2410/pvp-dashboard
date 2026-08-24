@@ -61,11 +61,33 @@ pip install -r backend/requirements.txt
 npm install -g concurrency
 ```
 
+También podés instalar todo una sola vez desde la raíz:
+
+```bash
+npm run setup
+```
+
 
 
 ---
 
-## 4. Correr el proyecto
+## 4. Crear el usuario administrador
+
+La aplicación arranca cerrada y no incluye contraseñas por defecto. Antes del primer ingreso, creá el administrador. El comando solicita la contraseña de forma oculta y exige al menos 14 caracteres y tres tipos de caracteres:
+
+```bash
+npm run create-user
+```
+
+Para restablecerla desde la terminal y cerrar todas las sesiones existentes:
+
+```bash
+python -m backend.manage_user admin --reset
+```
+
+---
+
+## 5. Correr el proyecto
 
 Con un solo comando desde la raíz:
 
@@ -86,12 +108,23 @@ Para detenerlo: `Ctrl + C`
 
 ---
 
-## 5. Uso
+## 6. Uso
 
 1. Arrastrá o seleccioná tu archivo `.xlsx` / `.xls`
 2. Usá el filtro **Usuario ML** para ver un vendedor en particular
 3. Buscá clientes por razón social o usuario en la barra de búsqueda
 4. Hacé clic en un cliente para ver el detalle de operaciones y su score
+
+---
+
+## Seguridad y producción
+
+- Todas las rutas de datos requieren una sesión revocable. Los tokens se guardan como hashes y viajan en cookies `HttpOnly` con `SameSite=Strict`.
+- Las operaciones que modifican datos requieren un token CSRF adicional. Los intentos de inicio de sesión se limitan y las contraseñas se derivan con `scrypt` y salt aleatorio.
+- Los archivos Excel tienen límites de tamaño, expansión, hojas, filas y columnas. Los nombres provenientes del archivo no se interpolan en SQL.
+- En producción, serví exclusivamente por HTTPS y configurá las variables de [`.env.example`](.env.example) en el entorno del proceso. No uses Vite como servidor público.
+- El proxy/TLS que sirva el build estático debe agregar también la política CSP incluida en `frontend/vite.config.js`.
+- `backend/*.db` está ignorado para evitar nuevos commits de datos. Si un archivo de datos ya estuvo versionado, retiralo también del historial del repositorio antes de publicarlo.
 
 ---
 

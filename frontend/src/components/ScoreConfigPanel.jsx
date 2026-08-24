@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useDashboard } from "../context/DashboardContext";
 import { scoreColor } from "../utils/score";
+import { apiFetch } from "../api";
 
 const MIN_BANDS = 1;
 const MAX_BANDS = 12;
@@ -82,7 +83,7 @@ export default function ScoreConfigPanel({ onClose }) {
     setError(null);
     setSuccess(false);
     try {
-      const res = await fetch("/score-config", {
+      const res = await apiFetch("/score-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ bands: parsed, defaultThreshold: parsedThreshold }),

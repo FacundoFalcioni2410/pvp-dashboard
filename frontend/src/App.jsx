@@ -16,6 +16,8 @@ import WatchlistSidebar from "./components/WatchlistSidebar";
 import MultiSelectFilter from "./components/MultiSelectFilter";
 import { useDashboard } from "./context/DashboardContext";
 import { useWatchlistSkus } from "./hooks/useWatchlistSkus";
+import { useAuth } from "./auth/AuthContext";
+import AccountPanel from "./auth/AccountPanel";
 import "./App.css";
 
 function FilterDropdown({ label, options, value, onChange }) {
@@ -353,8 +355,10 @@ function Dashboard() {
 
 export default function App() {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const { theme, toggle: toggleTheme } = useTheme();
   const [showScoreConfig, setShowScoreConfig] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
   const {
     dashboardData, setDashboardData, loading, loadingData,
     thresholdCount, refreshThresholdCount, datasets,
@@ -393,9 +397,17 @@ export default function App() {
         {rows.length > 0 && (
           <span className="row-count">{rows.length} registros</span>
         )}
+        <div className="user-menu">
+          <button className="user-button" onClick={() => setShowAccount(true)} title="Cambiar contraseña">
+            <span className="user-avatar" aria-hidden="true">{user.username.slice(0, 1).toUpperCase()}</span>
+            <span>{user.username}</span>
+          </button>
+          <button className="logout-button" onClick={logout}>Salir</button>
+        </div>
       </header>
 
       {showScoreConfig && <ScoreConfigPanel onClose={() => setShowScoreConfig(false)} />}
+      {showAccount && <AccountPanel onClose={() => setShowAccount(false)} />}
 
       {hasDataset && (
         <GlobalFiltersBar

@@ -1,4 +1,5 @@
 import json
+import hashlib
 import shutil
 import sqlite3
 from datetime import datetime
@@ -136,16 +137,18 @@ def populate_dataset_db(dataset_id: int, df: pd.DataFrame, sheet_name: str = Non
     conn = get_dataset_conn(dataset_id)
     try:
         if sheet_name:
-            table_name = f"sheet_{sheet_name.replace(' ', '_').replace('-', '_')}"
-            conn.execute(f"DROP TABLE IF EXISTS {table_name}")
-            col_defs = ", ".join(f'"{c}" TEXT' for c in df.columns)
-            conn.execute(f"CREATE TABLE {table_name} ({col_defs})")
+            # Spreadsheet-controlled sheet names must never become SQL identifiers.
+            suffix = hashlib.sha256(sheet_name.encode("utf-8")).hexdigest()[:16]
+            table_name = f"sheet_{suffix}"
+            conn.execute(f'DROP TABLE IF EXISTS "{table_name}"')
+            col_defs = ", ".join(f'"{str(c).replace(chr(34), chr(34) * 2)}" TEXT' for c in df.columns)
+            conn.execute(f'CREATE TABLE "{table_name}" ({col_defs})')
             if FECHA_COL in df.columns:
-                conn.execute(f'CREATE INDEX IF NOT EXISTS idx_fecha_{sheet_name[:3]} ON {table_name} ("{FECHA_COL}")')
+                conn.execute(f'CREATE INDEX IF NOT EXISTS "idx_fecha_{suffix}" ON "{table_name}" ("{FECHA_COL}")')
             df.to_sql(table_name, conn, if_exists="append", index=False)
         else:
             conn.execute("DROP TABLE IF EXISTS rows")
-            col_defs = ", ".join(f'"{c}" TEXT' for c in df.columns)
+            col_defs = ", ".join(f'"{str(c).replace(chr(34), chr(34) * 2)}" TEXT' for c in df.columns)
             conn.execute(f"CREATE TABLE rows ({col_defs})")
             conn.execute(f'CREATE INDEX idx_fecha ON rows ("{FECHA_COL}")')
             df.to_sql("rows", conn, if_exists="append", index=False)

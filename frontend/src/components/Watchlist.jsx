@@ -3,6 +3,7 @@ import MultiSelectFilter from "./MultiSelectFilter";
 import Charts from "./Charts";
 import { FIELDS } from "../utils/score";
 import { useDashboard } from "../context/DashboardContext";
+import { apiFetch } from "../api";
 
 function buildParams({ date, datasetId, filters, skus }) {
   const params = new URLSearchParams();
@@ -45,7 +46,7 @@ export default function Watchlist({ rows, selectedDate, selectedSkus, setSelecte
       setLoading(true);
       try {
         const params = buildParams({ date: selectedDate, datasetId: activeDatasetId, filters: globalFilters, skus: selectedSkus });
-        const res = await fetch(`/data?${params}`);
+        const res = await apiFetch(`/data?${params}`);
         if (!res.ok) throw new Error(`Server error ${res.status}`);
         const data = await res.json();
         if (id !== requestId.current) return;

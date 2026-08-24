@@ -9,7 +9,21 @@ const silentError = (err, req, res) => {
 export default defineConfig({
   plugins: [react()],
   server: {
+    headers: {
+      'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+      'Referrer-Policy': 'no-referrer',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+    },
     proxy: {
+      '/auth': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        proxyTimeout: 10000,
+        timeout: 10000,
+        onError: silentError,
+      },
       '/upload': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,

@@ -1,5 +1,6 @@
 # Dataset storage (SQLite files with user data)
 backend/datasets/
+backend/*.db
 
 # Logs
 logs
@@ -14,6 +15,8 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+backend/.env
 
 # Editor directories and files
 .vscode/*

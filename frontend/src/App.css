@@ -110,6 +110,22 @@ html, body {
   white-space: nowrap;
 }
 
+.user-menu { margin-left: auto; display: flex; align-items: center; gap: 7px; }
+.user-button, .logout-button { display: flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); padding: 6px 9px; cursor: pointer; font: inherit; }
+.user-button:hover, .logout-button:hover { border-color: var(--accent); }
+.logout-button { color: var(--text-muted); }
+.user-avatar { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: var(--accent); color: white; font-size: 12px; font-weight: 800; }
+.account-overlay { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(0, 0, 0, .64); }
+.account-panel { width: min(100%, 440px); display: grid; gap: 16px; padding: 24px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); box-shadow: 0 24px 80px rgba(0, 0, 0, .45); }
+.account-title { display: flex; align-items: center; justify-content: space-between; }
+.account-title h2 { font-size: 18px; }
+.account-title button { border: 0; background: none; color: var(--text-muted); font-size: 25px; cursor: pointer; }
+.account-panel > p { color: var(--text-muted); font-size: 13px; line-height: 1.45; }
+.account-panel input { background: var(--surface2); border-color: var(--border); color: var(--text); }
+.account-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.account-actions button { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface2); color: var(--text); cursor: pointer; }
+.account-actions button[type="submit"] { border-color: var(--accent); background: var(--accent); color: white; }
+
 .welcome {
   text-align: center;
   color: var(--text-muted);

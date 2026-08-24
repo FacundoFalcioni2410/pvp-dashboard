@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import axios from "axios";
+import { apiFetch } from "../api";
 
 export default function FileUpload({ onData }) {
   const [dragging, setDragging] = useState(false);
@@ -18,14 +18,16 @@ export default function FileUpload({ onData }) {
     const t0 = performance.now();
     console.log(`[upload] "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) — inicio`);
     try {
-      const { data } = await axios.post("/upload", form);
+      const response = await apiFetch("/upload", { method: "POST", body: form });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail ?? "Error al subir el archivo");
       const seconds = ((performance.now() - t0) / 1000).toFixed(2);
       console.log(`[upload] "${file.name}" — listo en ${seconds}s`);
       onData(data);
     } catch (e) {
       const seconds = ((performance.now() - t0) / 1000).toFixed(2);
       console.log(`[upload] "${file.name}" — error a los ${seconds}s`);
-      setError(e.response?.data?.detail ?? "Error al subir el archivo");
+      setError(e.message ?? "Error al subir el archivo");
     } finally {
       setLoading(false);
     }

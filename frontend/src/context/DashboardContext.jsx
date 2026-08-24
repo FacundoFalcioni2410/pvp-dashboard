@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
+import { apiFetch } from "../api";
 
 const DashboardContext = createContext(null);
 
@@ -32,8 +33,8 @@ export function DashboardProvider({ children }) {
     async function loadAll(attempt = 0) {
       try {
         const [initRes, scoreRes] = await Promise.all([
-          fetch("/init"),
-          fetch("/score-config"),
+          apiFetch("/init"),
+          apiFetch("/score-config"),
         ]);
 
         if (cancelled) return;
@@ -78,7 +79,7 @@ export function DashboardProvider({ children }) {
     try {
       const selectedDate = dashboardDataRef.current?.selectedDate ?? null;
       const params = buildParams(selectedDate, id, globalFiltersRef.current);
-      const res = await fetch(`/data?${params}`);
+      const res = await apiFetch(`/data?${params}`);
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const data = await res.json();
       if (data.filterOptions) setFilterOptions(data.filterOptions);
@@ -105,7 +106,7 @@ export function DashboardProvider({ children }) {
     try {
       const selectedDate = dashboardDataRef.current?.selectedDate ?? null;
       const params = buildParams(selectedDate, id, globalFiltersRef.current);
-      const res = await fetch(`/data?${params}`);
+      const res = await apiFetch(`/data?${params}`);
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const data = await res.json();
       if (data.filterOptions) setFilterOptions(data.filterOptions);
@@ -155,7 +156,7 @@ export function DashboardProvider({ children }) {
     try {
       const id = datasetId ?? activeDatasetIdRef.current;
       const params = buildParams(date, id, globalFiltersRef.current);
-      const res = await fetch(`/data?${params}`);
+      const res = await apiFetch(`/data?${params}`);
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const data = await res.json();
       if (data.filterOptions) setFilterOptions(data.filterOptions);
@@ -185,7 +186,7 @@ export function DashboardProvider({ children }) {
       const id = activeDatasetIdRef.current;
       const selectedDate = dashboardDataRef.current?.selectedDate ?? null;
       const params = buildParams(selectedDate, id, newFilters);
-      const res = await fetch(`/data?${params}`);
+      const res = await apiFetch(`/data?${params}`);
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const data = await res.json();
       if (data.filterOptions) setFilterOptions(data.filterOptions);
@@ -213,7 +214,7 @@ export function DashboardProvider({ children }) {
     setGlobalFiltersState(DEFAULT_FILTERS);
     globalFiltersRef.current = DEFAULT_FILTERS;
     try {
-      const res = await fetch(`/data?dataset_id=${datasetId}`);
+      const res = await apiFetch(`/data?dataset_id=${datasetId}`);
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const data = await res.json();
       setActiveDatasetId(datasetId);
@@ -234,7 +235,7 @@ export function DashboardProvider({ children }) {
 
   const deleteDataset = useCallback(async (datasetId) => {
     try {
-      const res = await fetch(`/datasets/${datasetId}`, { method: "DELETE" });
+      const res = await apiFetch(`/datasets/${datasetId}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const { datasets: newDatasets } = await res.json();
       setDatasets(newDatasets);
@@ -245,7 +246,7 @@ export function DashboardProvider({ children }) {
           setDashboardDataState(null);
         } else {
           const nextId = newDatasets[0].id;
-          const dataRes = await fetch(`/data?dataset_id=${nextId}`);
+          const dataRes = await apiFetch(`/data?dataset_id=${nextId}`);
           if (dataRes.ok) {
             const data = await dataRes.json();
             setActiveDatasetId(nextId);

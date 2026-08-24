@@ -4,6 +4,7 @@ import { useDashboard } from "../context/DashboardContext";
 import CompareView from "./CompareView";
 import { getTooltipStyle } from "../utils/theme";
 import DateRangePicker from "./DateRangePicker";
+import { apiFetch } from "../api";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell,
 } from "recharts";
@@ -109,7 +110,7 @@ export default function ProductDetail({ sku, rows: allRows, dates = [], onClose,
     if (allSkuRows !== null) return;
     const params = new URLSearchParams({ all_dates: "true" });
     if (activeDatasetId != null) params.set("dataset_id", activeDatasetId);
-    fetch(`/data?${params}`)
+    apiFetch(`/data?${params}`)
       .then((r) => r.json())
       .then((data) => {
         const skuRows = (data.rows ?? []).filter((r) => r[FIELDS.SKU] === sku);

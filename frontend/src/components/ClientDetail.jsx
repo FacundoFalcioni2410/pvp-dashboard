@@ -8,6 +8,7 @@ import { scoreColor, maxScoreFor, fmt, fmtPct, FIELDS } from "../utils/score";
 import DateRangePicker from "./DateRangePicker";
 import { getTooltipStyle } from "../utils/theme";
 import { useDashboard } from "../context/DashboardContext";
+import { apiFetch } from "../api";
 
 const PAGE_SIZE = 50;
 
@@ -179,7 +180,7 @@ export default function ClientDetail({ client, onClose, pctThreshold = null, onS
     if (allClientRows !== null) return;
     const params = new URLSearchParams({ all_dates: "true" });
     if (activeDatasetId != null) params.set("dataset_id", activeDatasetId);
-    fetch(`/data?${params}`)
+    apiFetch(`/data?${params}`)
       .then((r) => r.json())
       .then((data) => {
         const clientRows = (data.rows ?? []).filter((r) => r[FIELDS.RAZON_SOCIAL] === client?.name);

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import axios from "axios";
+import { apiFetch } from "../api";
 
 export default function ThresholdUpload({ thresholdCount, onUploaded }) {
   const inputRef = useRef();
@@ -14,10 +14,12 @@ export default function ThresholdUpload({ thresholdCount, onUploaded }) {
     const form = new FormData();
     form.append("file", file);
     try {
-      const { data } = await axios.post("/upload-thresholds", form);
+      const response = await apiFetch("/upload-thresholds", { method: "POST", body: form });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail ?? "Error al subir umbrales");
       onUploaded(data.total);
     } catch (e) {
-      setError(e.response?.data?.detail ?? "Error al subir umbrales");
+      setError(e.message ?? "Error al subir umbrales");
     } finally {
       setLoading(false);
     }
@@ -28,10 +30,12 @@ export default function ThresholdUpload({ thresholdCount, onUploaded }) {
     setLoading(true);
     setError(null);
     try {
-      const { data } = await axios.delete("/upload-thresholds");
+      const response = await apiFetch("/upload-thresholds", { method: "DELETE" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail ?? "Error al deshabilitar umbrales");
       onUploaded(data.total);
     } catch (e) {
-      setError(e.response?.data?.detail ?? "Error al deshabilitar umbrales");
+      setError(e.message ?? "Error al deshabilitar umbrales");
     } finally {
       setLoading(false);
     }

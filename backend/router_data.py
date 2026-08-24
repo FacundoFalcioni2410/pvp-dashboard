@@ -1,16 +1,24 @@
 import io
 import json
 import logging
+import re
 import time
+import zipfile
 from collections import defaultdict
+from pathlib import Path
 
 import pandas as pd
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 
-from config import PCT_DIF_COL, RAZON_SOCIAL_COL, SKU_COL
+from config import (
+    MAX_EXCEL_COLUMNS, MAX_EXCEL_ROWS, MAX_EXCEL_SHEETS,
+    MAX_EXCEL_UNCOMPRESSED_BYTES, MAX_UPLOAD_BYTES,
+    PCT_DIF_COL, RAZON_SOCIAL_COL, SKU_COL,
+)
 from database import (
     create_dataset_in_catalog,
+    delete_dataset_from_catalog,
     get_catalog_conn,
     get_dataset_conn,
     list_datasets_from_catalog,
@@ -20,6 +28,7 @@ from database import (
 )
 from filters import apply_global_filters, build_filter_options, build_response, filter_by_sku
 from scoring import compute_score, enrich_rows
+from security import CsrfUser, get_current_user
 
 logger = logging.getLogger("upload_timing")
 logger.setLevel(logging.INFO)
@@ -29,7 +38,7 @@ if not logger.handlers:
     logger.addHandler(_handler)
     logger.propagate = False
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @router.get("/init")
@@ -54,15 +63,15 @@ def init():
 
 @router.get("/data")
 def get_data(
-    date: str = Query(default=None),
-    dataset_id: int = Query(default=None),
+    date: str = Query(default=None, max_length=32),
+    dataset_id: int = Query(default=None, ge=1),
     all_dates: bool = Query(default=False),
-    tipoCliente: str = Query(default=None),
-    canal: str = Query(default=None),
-    macrofamilia: str = Query(default=None),
-    marca: str = Query(default=None),
-    rot: str = Query(default=None),
-    sku: str = Query(default=None),
+    tipoCliente: str = Query(default=None, max_length=5000),
+    canal: str = Query(default=None, max_length=5000),
+    macrofamilia: str = Query(default=None, max_length=5000),
+    marca: str = Query(default=None, max_length=5000),
+    rot: str = Query(default=None, max_length=5000),
+    sku: str = Query(default=None, max_length=5000),
 ):
     datasets = list_datasets_from_catalog()
     if not datasets:
@@ -118,33 +127,54 @@ def get_data(
 
 
 @router.post("/upload")
-async def upload_excel(file: UploadFile = File(...)):
+async def upload_excel(user: CsrfUser, file: UploadFile = File(...)):
     t_start = time.perf_counter()
-    logger.info("upload start: %s", file.filename)
+    safe_filename = Path(file.filename or "").name
+    safe_filename = re.sub(r"[^\w. -]", "_", safe_filename, flags=re.UNICODE)[:150]
+    logger.info("upload start: %s", safe_filename)
 
-    if not file.filename.endswith((".xlsx", ".xls")):
+    if Path(safe_filename).suffix.lower() not in {".xlsx", ".xls"}:
         raise HTTPException(status_code=400, detail="Only .xlsx / .xls files are accepted")
 
-    contents = await file.read()
+    contents = await file.read(MAX_UPLOAD_BYTES + 1)
+    await file.close()
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File is larger than the configured upload limit")
+    if not contents:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty")
+    if Path(safe_filename).suffix.lower() == ".xlsx":
+        try:
+            with zipfile.ZipFile(io.BytesIO(contents)) as archive:
+                entries = archive.infolist()
+                if len(entries) > 2_000 or sum(item.file_size for item in entries) > MAX_EXCEL_UNCOMPRESSED_BYTES:
+                    raise HTTPException(status_code=413, detail="Expanded workbook is too large")
+        except zipfile.BadZipFile as exc:
+            raise HTTPException(status_code=422, detail="Invalid Excel workbook") from exc
     try:
         # calamine (Rust) reads raw cell data directly and stays fast even on sheets
         # with a bloated used-range (old formatting on empty cells past the real data),
         # where openpyxl crawls cell-by-cell regardless of read_only mode.
         xl = pd.ExcelFile(io.BytesIO(contents), engine="calamine")
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Could not parse Excel file: {e}")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("Workbook parsing failed: %s", type(exc).__name__)
+        raise HTTPException(status_code=422, detail="Could not parse Excel file") from exc
+
+    if len(xl.sheet_names) > MAX_EXCEL_SHEETS:
+        raise HTTPException(status_code=413, detail="Workbook contains too many sheets")
 
     t_parsed = time.perf_counter()
-    logger.info("upload [%s]: excel parsed in %.2fs", file.filename, t_parsed - t_start)
+    logger.info("upload [%s]: excel parsed in %.2fs", safe_filename, t_parsed - t_start)
 
     def _has_pct_col(columns):
         cols_lower = [str(c).strip().lower() for c in columns]
         return PCT_DIF_COL.lower() in cols_lower or any(PCT_DIF_COL.lower() in c for c in cols_lower)
 
-    base_name = file.filename.rsplit(".", 1)[0] if "." in file.filename else file.filename
-    dataset_id = create_dataset_in_catalog(base_name, file.filename, 0)
+    base_name = safe_filename.rsplit(".", 1)[0] if "." in safe_filename else safe_filename
+    dataset_id = create_dataset_in_catalog(base_name, safe_filename, 0)
 
-    logger.info("upload [%s]: scanning %d sheet(s): %s", file.filename, len(xl.sheet_names), xl.sheet_names)
+    logger.info("upload [%s]: scanning %d sheet(s)", safe_filename, len(xl.sheet_names))
 
     valid_sheets = []
     total_rows = 0
@@ -163,7 +193,11 @@ async def upload_excel(file: UploadFile = File(...)):
                     continue
 
                 sheet_df = xl.parse(sheet, header=header_row)
+                if len(sheet_df) > MAX_EXCEL_ROWS or len(sheet_df.columns) > MAX_EXCEL_COLUMNS:
+                    raise ValueError("worksheet exceeds configured dimensions")
                 sheet_df.columns = [str(c).strip() for c in sheet_df.columns]
+                if len(set(sheet_df.columns)) != len(sheet_df.columns):
+                    raise ValueError("worksheet contains duplicate column names")
                 if PCT_DIF_COL not in sheet_df.columns:
                     match = [c for c in sheet_df.columns if c.lower() == PCT_DIF_COL.lower()]
                     if match:
@@ -183,19 +217,20 @@ async def upload_excel(file: UploadFile = File(...)):
                 continue
         logger.info(
             "upload [%s]: sheet '%s' %s in %.2fs",
-            file.filename, sheet, "matched" if matched else "skipped", time.perf_counter() - t_sheet,
+            safe_filename, sheet, "matched" if matched else "skipped", time.perf_counter() - t_sheet,
         )
 
     if not valid_sheets:
+        delete_dataset_from_catalog(dataset_id)
         raise HTTPException(
             status_code=422,
-            detail=f"No sheet found containing column '{PCT_DIF_COL}'. Sheets: {xl.sheet_names}",
+            detail=f"No valid sheet found containing column '{PCT_DIF_COL}'",
         )
 
     t_sheets_populated = time.perf_counter()
     logger.info(
         "upload [%s]: %d sheets / %d rows parsed+populated in %.2fs",
-        file.filename, len(valid_sheets), total_rows, t_sheets_populated - t_parsed,
+        safe_filename, len(valid_sheets), total_rows, t_sheets_populated - t_parsed,
     )
 
     conn = get_catalog_conn()
@@ -214,7 +249,7 @@ async def upload_excel(file: UploadFile = File(...)):
     t_first_sheet_populated = time.perf_counter()
     logger.info(
         "upload [%s]: undated rows populated in %.2fs",
-        file.filename, t_first_sheet_populated - t_sheets_populated,
+        safe_filename, t_first_sheet_populated - t_sheets_populated,
     )
 
     datasets = list_datasets_from_catalog()
@@ -226,7 +261,7 @@ async def upload_excel(file: UploadFile = File(...)):
     t_queried = time.perf_counter()
     logger.info(
         "upload [%s]: rows queried (%d latest / %d all) in %.2fs",
-        file.filename, len(rows), len(all_rows), t_queried - t_first_sheet_populated,
+        safe_filename, len(rows), len(all_rows), t_queried - t_first_sheet_populated,
     )
 
     body = json.loads(build_response(rows, all_rows))
@@ -240,7 +275,7 @@ async def upload_excel(file: UploadFile = File(...)):
     t_end = time.perf_counter()
     logger.info(
         "upload [%s]: charts built in %.2fs — total %.2fs",
-        file.filename, t_end - t_queried, t_end - t_start,
+        safe_filename, t_end - t_queried, t_end - t_start,
     )
 
     return Response(content=json.dumps(body, ensure_ascii=False), media_type="application/json")
@@ -248,10 +283,10 @@ async def upload_excel(file: UploadFile = File(...)):
 
 @router.get("/compare")
 def compare_data(
-    dataset1_id: int = Query(...),
-    dataset2_id: int = Query(...),
-    client: str = Query(default=None),
-    sku: str = Query(default=None),
+    dataset1_id: int = Query(..., ge=1),
+    dataset2_id: int = Query(..., ge=1),
+    client: str = Query(default=None, max_length=500),
+    sku: str = Query(default=None, max_length=500),
 ):
     datasets_catalog = list_datasets_from_catalog()
     ids_map = {d["id"]: d for d in datasets_catalog}
