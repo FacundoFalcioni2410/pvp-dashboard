@@ -1,5 +1,9 @@
 import { useRef, useState } from "react";
-import { apiFetch } from "../api";
+import { upload as blobUpload } from "@vercel/blob/client";
+import { apiFetch, API_BASE_URL } from "../api";
+
+const DIRECT_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
+const FORCE_DIRECT_UPLOAD = import.meta.env.DEV;
 
 // Header control for the "Comparación" section's source workbook
 // (Cambios TOTAL / DYLLU / OSBURK). Mirrors ThresholdUpload: upload replaces the
@@ -10,14 +14,32 @@ export default function CatalogChangesUpload({ count, onChanged }) {
   const [error, setError] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  async function uploadDirect(file) {
+    const form = new FormData();
+    form.append("file", file);
+    return apiFetch("/upload-catalog-changes", { method: "POST", body: form });
+  }
+
+  async function uploadViaBlob(file) {
+    const blob = await blobUpload(file.name, file, {
+      access: "private",
+      handleUploadUrl: `${API_BASE_URL}/blob/upload`,
+    });
+    return apiFetch("/upload-catalog-changes-from-blob", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ blob_url: blob.url, filename: file.name }),
+    });
+  }
+
   async function upload(file) {
     if (!file) return;
     setLoading(true);
     setError(null);
-    const form = new FormData();
-    form.append("file", file);
     try {
-      const response = await apiFetch("/upload-catalog-changes", { method: "POST", body: form });
+      const response = (!FORCE_DIRECT_UPLOAD && file.size > DIRECT_UPLOAD_MAX_BYTES)
+        ? await uploadViaBlob(file)
+        : await uploadDirect(file);
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail ?? "Error al subir el Excel de cambios");
       await onChanged();

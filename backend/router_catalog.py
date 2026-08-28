@@ -1,5 +1,6 @@
 import io
 import logging
+import os
 import re
 import time
 import unicodedata
@@ -8,7 +9,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
+import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger("upload_timing")
 
@@ -17,6 +20,7 @@ from config import (
     MAX_EXCEL_ROWS,
     MAX_EXCEL_SHEETS,
     MAX_EXCEL_UNCOMPRESSED_BYTES,
+    MAX_BLOB_DOWNLOAD_BYTES,
     MAX_UPLOAD_BYTES,
 )
 from database import delete_catalog_changes, get_catalog_changes, get_catalog_changes_meta, replace_catalog_changes
@@ -219,6 +223,74 @@ async def upload_catalog_changes(user: CsrfUser, file: UploadFile = File(...)):
         "uploaded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     replace_catalog_changes(entries, meta)
+    return {"loaded": len(entries), "meta": get_catalog_changes_meta()}
+
+
+class CatalogBlobUploadRequest(BaseModel):
+    blob_url: str = Field(min_length=1, max_length=2048)
+    filename: str = Field(min_length=1, max_length=200)
+
+
+def _delete_catalog_blob(blob_url: str) -> None:
+    token = os.getenv("BLOB_READ_WRITE_TOKEN", "")
+    if not token:
+        return
+    try:
+        httpx.post(
+            "https://blob.vercel-storage.com/delete",
+            json={"urls": [blob_url]},
+            headers={"authorization": f"Bearer {token}", "x-api-version": "10"},
+            timeout=10,
+        )
+    except httpx.HTTPError:
+        logger.warning("Failed to delete catalog blob %s after ingestion", blob_url)
+
+
+@router.post("/upload-catalog-changes-from-blob")
+async def upload_catalog_changes_from_blob(payload: CatalogBlobUploadRequest, user: CsrfUser):
+    """Ingest catalog changes uploaded directly from the browser to Vercel Blob."""
+    safe_filename = Path(payload.filename).name
+    safe_filename = re.sub(r"[^\w. -]", "_", safe_filename, flags=re.UNICODE)[:150]
+    if Path(safe_filename).suffix.lower() not in {".xlsx", ".xls"}:
+        raise HTTPException(status_code=400, detail="Only .xlsx / .xls files are accepted")
+    if not re.match(r"^https://[a-z0-9]+\.private\.blob\.vercel-storage\.com/", payload.blob_url):
+        raise HTTPException(status_code=400, detail="Invalid blob URL")
+
+    token = os.getenv("BLOB_READ_WRITE_TOKEN", "")
+    try:
+        with httpx.stream(
+            "GET",
+            payload.blob_url,
+            timeout=60,
+            headers={"authorization": f"Bearer {token}"} if token else {},
+        ) as response:
+            response.raise_for_status()
+            chunks = []
+            total = 0
+            for chunk in response.iter_bytes():
+                total += len(chunk)
+                if total > MAX_BLOB_DOWNLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail="File is larger than the configured blob upload limit",
+                    )
+                chunks.append(chunk)
+            contents = b"".join(chunks)
+    except HTTPException:
+        raise
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="Could not download uploaded file") from exc
+
+    try:
+        entries = parse_catalog_changes(contents)
+        meta = {
+            "filename": safe_filename,
+            "uploaded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
+        replace_catalog_changes(entries, meta)
+    finally:
+        _delete_catalog_blob(payload.blob_url)
+
     return {"loaded": len(entries), "meta": get_catalog_changes_meta()}
 
 
