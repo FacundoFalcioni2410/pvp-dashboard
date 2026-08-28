@@ -11,6 +11,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 
 from database import ensure_catalog
+from router_catalog import router as catalog_router
 from router_data import router as data_router
 from router_datasets import router as datasets_router
 from router_score import router as score_router
@@ -93,6 +94,7 @@ app.include_router(data_router, prefix="/api")
 app.include_router(datasets_router, prefix="/api")
 app.include_router(score_router, prefix="/api")
 app.include_router(thresholds_router, prefix="/api")
+app.include_router(catalog_router, prefix="/api")
 
 
 @app.on_event("startup")

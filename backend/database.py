@@ -19,16 +19,37 @@ TURSO_DATABASE_URL = os.getenv(
 TURSO_AUTH_TOKEN = os.getenv(
     "DATABASE_TURSO_AUTH_TOKEN", os.getenv("TURSO_AUTH_TOKEN", "")
 ).strip()
+# Local dev escape hatch: point at a plain SQLite file instead of round-tripping
+# every statement to remote Turso. libSQL is a SQLite superset, so the schema and
+# queries here run unchanged. Unset in production -> Turso as before.
+LOCAL_DB_PATH = os.getenv("PVP_LOCAL_DB", "").strip()
 PRIMARY_SHEET = "__rows__"
 INSERT_BATCH_SIZE = 5000
 
 
+def _connect_local():
+    import sqlite3
+
+    path = Path(LOCAL_DB_PATH).expanduser()
+    if not path.is_absolute():
+        path = Path(__file__).resolve().parent / path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path), timeout=30, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+
 def get_catalog_conn():
-    """Return the remote Turso DB-API connection used in every environment."""
+    """DB-API connection to the catalog store: a local SQLite file when
+    PVP_LOCAL_DB is set, otherwise the remote Turso database."""
+    if LOCAL_DB_PATH:
+        return _connect_local()
     if not TURSO_DATABASE_URL or not TURSO_AUTH_TOKEN:
         raise RuntimeError(
             "Turso is required. Set DATABASE_TURSO_DATABASE_URL and "
-            "DATABASE_TURSO_AUTH_TOKEN."
+            "DATABASE_TURSO_AUTH_TOKEN (or PVP_LOCAL_DB for a local SQLite file)."
         )
     try:
         import turso_serverless
@@ -76,7 +97,29 @@ def ensure_catalog():
 
             CREATE INDEX IF NOT EXISTS idx_dataset_rows_date
             ON dataset_rows(dataset_id, sheet_name, row_date);
+
+            CREATE TABLE IF NOT EXISTS catalog_changes (
+                row_number INTEGER PRIMARY KEY,
+                sheet_name TEXT,
+                fecha TEXT,
+                cambio TEXT NOT NULL,
+                sku TEXT,
+                descripcion TEXT,
+                datos TEXT,
+                reemplaza_a TEXT,
+                marca TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS catalog_changes_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
         """)
+        catalog_change_columns = {
+            str(row[1]) for row in conn.execute("PRAGMA table_info(catalog_changes)").fetchall()
+        }
+        if "sheet_name" not in catalog_change_columns:
+            conn.execute("ALTER TABLE catalog_changes ADD COLUMN sheet_name TEXT")
         conn.commit()
     finally:
         conn.close()
@@ -177,6 +220,92 @@ def delete_thresholds() -> int:
         conn.execute("DELETE FROM thresholds")
         conn.commit()
         return int(conn.execute("SELECT COUNT(*) FROM thresholds").fetchone()[0])
+    finally:
+        conn.close()
+
+
+CATALOG_CHANGE_FIELDS = (
+    "sheet_name", "fecha", "cambio", "sku", "descripcion", "datos", "reemplaza_a", "marca"
+)
+
+
+def get_catalog_changes() -> list[dict]:
+    conn = get_catalog_conn()
+    try:
+        cursor = conn.execute(
+            "SELECT sheet_name, fecha, cambio, sku, descripcion, datos, reemplaza_a, marca "
+            "FROM catalog_changes ORDER BY row_number ASC"
+        )
+        return _dict_rows(cursor)
+    finally:
+        conn.close()
+
+
+def get_catalog_changes_meta() -> dict:
+    conn = get_catalog_conn()
+    try:
+        rows = conn.execute("SELECT key, value FROM catalog_changes_meta").fetchall()
+        meta = {str(row[0]): str(row[1]) for row in rows}
+        count = int(conn.execute("SELECT COUNT(*) FROM catalog_changes").fetchone()[0])
+        meta["count"] = count
+        return meta
+    finally:
+        conn.close()
+
+
+def replace_catalog_changes(entries: list[dict], meta: dict) -> int:
+    """Swap the whole catalog-changes table for a freshly uploaded workbook."""
+    values = [
+        (
+            index,
+            str(entry.get("sheet_name") or "") or None,
+            str(entry.get("fecha") or "") or None,
+            str(entry.get("cambio") or ""),
+            str(entry.get("sku") or "") or None,
+            str(entry.get("descripcion") or "") or None,
+            str(entry.get("datos") or "") or None,
+            str(entry.get("reemplaza_a") or "") or None,
+            str(entry.get("marca") or "") or None,
+        )
+        for index, entry in enumerate(entries)
+    ]
+
+    # 9 bound params per row; keep each statement well under SQLite's
+    # ~32k variable ceiling.
+    batch = min(INSERT_BATCH_SIZE, 4000)
+    conn = get_catalog_conn()
+    try:
+        conn.execute("DELETE FROM catalog_changes")
+        for offset in range(0, len(values), batch):
+            chunk = values[offset:offset + batch]
+            placeholders = ", ".join(["(?, ?, ?, ?, ?, ?, ?, ?, ?)"] * len(chunk))
+            flat_params = [param for row in chunk for param in row]
+            conn.execute(
+                "INSERT INTO catalog_changes "
+                "(row_number, sheet_name, fecha, cambio, sku, descripcion, datos, reemplaza_a, marca) VALUES "
+                + placeholders,
+                flat_params,
+            )
+        conn.execute("DELETE FROM catalog_changes_meta")
+        for key in ("filename", "uploaded_at"):
+            if meta.get(key):
+                conn.execute(
+                    "INSERT OR REPLACE INTO catalog_changes_meta (key, value) VALUES (?, ?)",
+                    (key, str(meta[key])),
+                )
+        conn.commit()
+        return int(conn.execute("SELECT COUNT(*) FROM catalog_changes").fetchone()[0])
+    finally:
+        conn.close()
+
+
+def delete_catalog_changes() -> int:
+    conn = get_catalog_conn()
+    try:
+        conn.execute("DELETE FROM catalog_changes")
+        conn.execute("DELETE FROM catalog_changes_meta")
+        conn.commit()
+        return int(conn.execute("SELECT COUNT(*) FROM catalog_changes").fetchone()[0])
     finally:
         conn.close()
 

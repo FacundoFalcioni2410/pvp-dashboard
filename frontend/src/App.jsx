@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import { Routes, Route, NavLink, useNavigate, useLocation } from "react-router-dom";
 import FileUpload from "./components/FileUpload";
+import ComparisonView from "./components/ComparisonView";
+import CatalogChangesUpload from "./components/CatalogChangesUpload";
 import ClientList from "./components/ClientList";
 import ClientDetail from "./components/ClientDetail";
 import ProductList from "./components/ProductList";
@@ -355,6 +357,7 @@ function Dashboard() {
 
 export default function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
   const { theme, toggle: toggleTheme } = useTheme();
   const [showScoreConfig, setShowScoreConfig] = useState(false);
@@ -363,10 +366,13 @@ export default function App() {
     dashboardData, setDashboardData, loading, loadingData,
     thresholdCount, refreshThresholdCount, datasets,
     globalFilters, setGlobalFilter, filterOptions,
+    catalogChanges, reloadCatalogChanges,
   } = useDashboard();
 
   const rows = dashboardData?.rows ?? [];
   const hasDataset = dashboardData !== null && (dashboardData.dates?.length > 0 || dashboardData.clients?.length > 0);
+  const isComparison = location.pathname === "/comparison";
+  const welcome = <p className="welcome">Subí tu Excel para comenzar el análisis de precios.</p>;
 
   if (loading) {
     return (
@@ -387,15 +393,29 @@ export default function App() {
       )}
       <header className="app-header">
         <h1>Control de Precios Dashboard</h1>
+        <nav className="app-nav">
+          <NavLink to="/" end className={({ isActive }) => `app-nav-link ${isActive ? "active" : ""}`}>
+            Dashboard
+          </NavLink>
+          <NavLink to="/comparison" className={({ isActive }) => `app-nav-link ${isActive ? "active" : ""}`}>
+            Comparación
+          </NavLink>
+        </nav>
         <button className="theme-toggle" onClick={toggleTheme} title="Cambiar tema">
           {theme === "dark" ? "☀️" : "🌙"}
         </button>
-        <FileUpload onData={setDashboardData} />
-        <ThresholdUpload thresholdCount={thresholdCount} onUploaded={refreshThresholdCount} />
-        <ScoreLegend onEdit={() => setShowScoreConfig(true)} />
-        <DatasetList />
-        {rows.length > 0 && (
-          <span className="row-count">{rows.length} registros</span>
+        {isComparison ? (
+          <CatalogChangesUpload count={catalogChanges?.meta?.count ?? 0} onChanged={reloadCatalogChanges} />
+        ) : (
+          <>
+            <FileUpload onData={setDashboardData} />
+            <ThresholdUpload thresholdCount={thresholdCount} onUploaded={refreshThresholdCount} />
+            <ScoreLegend onEdit={() => setShowScoreConfig(true)} />
+            <DatasetList />
+            {rows.length > 0 && (
+              <span className="row-count">{rows.length} registros</span>
+            )}
+          </>
         )}
         <div className="user-menu">
           <button className="user-button" onClick={() => setShowAccount(true)} title="Cambiar contraseña">
@@ -409,7 +429,7 @@ export default function App() {
       {showScoreConfig && <ScoreConfigPanel onClose={() => setShowScoreConfig(false)} />}
       {showAccount && <AccountPanel onClose={() => setShowAccount(false)} />}
 
-      {hasDataset && (
+      {hasDataset && !isComparison && (
         <GlobalFiltersBar
           filterOptions={filterOptions}
           globalFilters={globalFilters}
@@ -417,18 +437,15 @@ export default function App() {
         />
       )}
 
-      {hasDataset ? (
-        <div className="main-layout">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/client/:clientName" element={<Dashboard />} />
-            <Route path="/product/*" element={<Dashboard />} />
-            <Route path="/watchlist" element={<Dashboard />} />
-          </Routes>
-        </div>
-      ) : (
-        <p className="welcome">Subí tu Excel para comenzar el análisis de precios.</p>
-      )}
+      <div className={isComparison ? "cmp-layout" : hasDataset ? "main-layout" : "welcome-layout"}>
+        <Routes>
+          <Route path="/comparison" element={<ComparisonView />} />
+          <Route path="/" element={hasDataset ? <Dashboard /> : welcome} />
+          <Route path="/client/:clientName" element={hasDataset ? <Dashboard /> : welcome} />
+          <Route path="/product/*" element={hasDataset ? <Dashboard /> : welcome} />
+          <Route path="/watchlist" element={hasDataset ? <Dashboard /> : welcome} />
+        </Routes>
+      </div>
     </div>
   );
 }
