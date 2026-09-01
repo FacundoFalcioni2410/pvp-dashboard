@@ -91,6 +91,8 @@ def normalise_pct(pct_val):
         val = float(pct_val)
     except (TypeError, ValueError):
         return None
+    if math.isnan(val) or math.isinf(val):
+        return None
     if abs(val) <= 1.5:
         val = val * 100
     return val
