@@ -71,6 +71,8 @@ def compute_score(pct_diff, threshold: float = DEFAULT_THRESHOLD) -> int:
         val = float(pct_diff)
     except (TypeError, ValueError):
         return 0
+    if math.isnan(val) or math.isinf(val):
+        return 0
     if abs(val) <= 1.5:
         val = val * 100
     abs_val = math.floor(abs(val) + 0.5)
