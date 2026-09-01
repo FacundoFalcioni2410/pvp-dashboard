@@ -19,6 +19,7 @@ export function DashboardProvider({ children }) {
   const [scoreConfig, setScoreConfigState] = useState(DEFAULT_SCORE_CONFIG);
   const [globalFilters, setGlobalFiltersState] = useState(DEFAULT_FILTERS);
   const [filterOptions, setFilterOptions] = useState({ clientes: [], canales: [], macrofamilias: [], marcas: [], rots: [] });
+  const [catalogChanges, setCatalogChanges] = useState({ changes: [], meta: { count: 0 } });
 
   // Ref so fetch callbacks always see the latest filters without recreating themselves
   const globalFiltersRef = useRef(DEFAULT_FILTERS);
@@ -209,6 +210,18 @@ export function DashboardProvider({ children }) {
   const dashboardDataRef = useRef(null);
   useEffect(() => { dashboardDataRef.current = dashboardData; }, [dashboardData]);
 
+  // Catalog-changes ("Comparación") is independent of the price dataset: its own
+  // Excel, its own table, fetched once and re-fetched after an upload/clear.
+  const reloadCatalogChanges = useCallback(async () => {
+    try {
+      const res = await apiFetch("/catalog-changes");
+      if (res.ok) setCatalogChanges(await res.json());
+    } catch (err) {
+      console.error("Failed to load catalog changes:", err);
+    }
+  }, []);
+  useEffect(() => { reloadCatalogChanges(); }, [reloadCatalogChanges]);
+
   const switchDataset = useCallback(async (datasetId) => {
     setLoadingData(true);
     setGlobalFiltersState(DEFAULT_FILTERS);
@@ -286,6 +299,8 @@ export function DashboardProvider({ children }) {
       globalFilters,
       setGlobalFilter,
       filterOptions,
+      catalogChanges,
+      reloadCatalogChanges,
     }}>
       {children}
     </DashboardContext.Provider>

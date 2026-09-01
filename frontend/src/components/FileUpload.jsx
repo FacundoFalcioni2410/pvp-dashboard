@@ -5,7 +5,10 @@ import { apiFetch, API_BASE_URL } from "../api";
 // Vercel serverless functions reject request bodies over ~4.5MB before the
 // backend ever runs. Files above this go straight to Vercel Blob from the
 // browser instead, and the backend only receives the resulting URL.
+// In local dev there is no such limit (and no blob-api process), so always
+// post the file straight to /api/upload.
 const DIRECT_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
+const FORCE_DIRECT_UPLOAD = import.meta.env.DEV;
 
 export default function FileUpload({ onData }) {
   const [dragging, setDragging] = useState(false);
@@ -40,7 +43,7 @@ export default function FileUpload({ onData }) {
     const t0 = performance.now();
     console.log(`[upload] "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) — inicio`);
     try {
-      const response = file.size > DIRECT_UPLOAD_MAX_BYTES
+      const response = (!FORCE_DIRECT_UPLOAD && file.size > DIRECT_UPLOAD_MAX_BYTES)
         ? await uploadViaBlob(file)
         : await uploadDirect(file);
       const data = await response.json().catch(() => ({}));
